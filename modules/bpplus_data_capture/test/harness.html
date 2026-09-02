@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>BP+ Data Capture - test harness</title>
+
+<!--
+  The REDCap instrument, without REDCap.
+
+  This page reproduces the instrument the module runs on - the same element ids,
+  one input per field - and loads js/bpplus-capture.js UNMODIFIED. The connect,
+  feature-read and measure paths it exercises are the ones a survey runs; only
+  the surrounding page is different.
+
+  That is the whole point of it: a researcher can see what the module does, and
+  what lands in the record, before asking an administrator to install anything.
+
+  It needs a web server. ES modules and the browser device APIs both refuse to
+  run from a file:// address:
+
+      python -m http.server 8080
+      http://localhost:8080/modules/bpplus_data_capture/test/harness.html
+
+  The module offers exactly one hook for this and nothing else: if
+  window.BPPLUS_TRANSPORT is a function it is asked for the transport, which is
+  how this page substitutes the simulator. REDCap never sets it.
+-->
+
+<style>
+  :root {
+    --ink:#1c2430; --muted:#5d6b7a; --line:#d8dee6; --ground:#f6f8fa;
+    --accent:#0b5394; --panel:#fff;
+    --ok:#2d6a4f; --ok-bg:#d8f3dc; --bad:#b71c1c; --bad-bg:#fdecea;
+    --warn:#8a6100; --warn-bg:#fff8e1;
+  }
+  * { box-sizing:border-box; }
+
+  /* overflow-wrap:anywhere on the body, which inherits. It is the only one of
+     the wrapping properties that reduces an element's MIN-CONTENT width, so it
+     is what stops a single long token holding the page open -- break-word looks
+     the same in prose and does not affect sizing at all.
+     
+     The token that did it here was the path in the instrument banner,
+     "instruments/bpplus_measurement/instrument.html", which has no spaces to
+     break at. At a phone-width viewport that alone made the page scroll
+     sideways, and everything in it, tables included, was dragged wider.
+     
+     It only breaks a word when the word does not otherwise fit, so ordinary
+     prose is unaffected. */
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         overflow-wrap:anywhere; }
+  .wrap { max-width:1080px; margin:0 auto; padding:26px 20px 90px; }
+  h1 { font-size:22px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:15px; margin:0 0 10px; text-transform:uppercase;
+       letter-spacing:.07em; color:var(--muted); font-weight:600; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+
+  .grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:18px; align-items:start; }
+  /* One column below 900px, which is where a tablet lands in its ordinary mode.
+     The two column wrappers become display:contents so every card is a grid item
+     in its own right, and the order below applies -- otherwise the whole right
+     column stacks beneath the whole left one, and Conformance, which is the
+     verdict on the measurement just taken, ends up below the waveform and off
+     the bottom of the screen. */
+  @media (max-width:900px) {
+    /* minmax(0,1fr), not 1fr. A bare 1fr means minmax(auto,1fr), and auto is
+       min-content -- so the widest card sets a floor the track cannot go below,
+       and on a narrow screen every card, and every table in them, is dragged
+       wider than the viewport. The two-column rule above already says
+       minmax(0,...); this one did not, which is why the symptom was portrait
+       only. */
+    .grid { grid-template-columns:minmax(0,1fr); }
+    .grid > div { display:contents; }
+
+    .card-instrument  { order:1; }
+    .card-fields      { order:2; }
+    .card-standin     { order:3; }
+    .card-conformance { order:4; }
+    .card-cuff        { order:5; }
+    .card-trace       { order:6; }
+    .card-selftest    { order:7; }
+  }
+
+  /* min-width:0 because a grid item defaults to min-width:auto, which stops it
+     shrinking below its content. Without it a single long word anywhere in a
+     card can widen the whole column. */
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+          padding:18px; margin-bottom:18px; min-width:0; }
+
+  /* The module sets this element's font size inline (22px) for the operator to
+     read across a room. On a narrow screen a long status -- the cancel sentence
+     is the longest -- then has a wide min-content, so let it break anywhere
+     rather than hold the layout open. */
+  #bpplus-status { overflow-wrap:anywhere; }
+
+  label { display:block; font-size:13px; color:var(--muted); margin:0 0 4px; }
+  select, input[type=text] { width:100%; padding:7px 9px; border:1px solid var(--line);
+          border-radius:7px; font:inherit; background:#fff; color:inherit; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .row > div { flex:1 1 190px; min-width:0; }
+
+  .btn { padding:8px 14px; border:1px solid var(--line); border-radius:8px;
+         background:#fff; font:inherit; cursor:pointer; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .btn-primaryrc { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn-defaultrc { background:#fff; }
+
+  /* Every table scrolls inside its own box rather than pushing the page around.
+     Belt as well as braces: with fixed layout below nothing should ever be too
+     wide, and if something is, it stays inside the card. */
+  .tablewrap { overflow-x:auto; }
+
+  /* table-layout:fixed is the point. With the default (auto) a column is sized
+     from its content, so one long value -- the reduced recording in
+     bpplus_xml_text runs to thousands of characters -- re-proportions the whole
+     table the moment it is written, and the table appears to resize itself at
+     random as a measurement fills the fields in. Fixed sizes the columns from
+     the widths declared here and ignores what is in them. */
+  table { width:100%; border-collapse:collapse; font-size:13.5px; table-layout:fixed; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line);
+           vertical-align:top; overflow-wrap:anywhere; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase;
+       letter-spacing:.05em; }
+  td.name { font-family:ui-monospace,Consolas,monospace; }
+  td.val  { font-family:ui-monospace,Consolas,monospace; }
+  tr.empty td.val { color:#aab3bd; }
+
+  /* Declared once, because fixed layout takes its widths from the first row. */
+  table.fields  th:nth-child(1), table.fields  td:nth-child(1) { width:38%; }
+  table.record  th:nth-child(1), table.record  td:nth-child(1) { width:26%; }
+  table.record  th:nth-child(3), table.record  td:nth-child(3) { width:16%; }
+  table.record  th:nth-child(4), table.record  td:nth-child(4) { width:20%; }
+  table.record  th:nth-child(5), table.record  td:nth-child(5) { width:16%; }
+
+  pre { margin:0; max-height:280px; overflow:auto; background:#0f1720; color:#d5e2ee;
+        padding:12px; border-radius:8px; font:12.5px/1.5 ui-monospace,Consolas,monospace; }
+  pre .tx { color:#8fd3ff; }
+  pre .rx { color:#a9e6b8; }
+
+  .check { padding:3px 0; font-size:13.5px; }
+  .check b { font-family:ui-monospace,Consolas,monospace; }
+  .pass::before { content:"PASS  "; color:var(--ok); font-weight:700;
+                  font-family:ui-monospace,Consolas,monospace; }
+  .fail::before { content:"FAIL  "; color:var(--bad); font-weight:700;
+                  font-family:ui-monospace,Consolas,monospace; }
+  .skip::before { content:"----  "; color:var(--muted); font-weight:700;
+                  font-family:ui-monospace,Consolas,monospace; }
+
+  .banner { border-radius:8px; padding:10px 14px; font-size:13.5px; margin-bottom:14px; }
+  .banner.warn { background:var(--warn-bg); border:1px solid #ffe082; color:var(--warn); }
+  .banner.info { background:#eaf3fb; border:1px solid #cfe2ff; color:#0b3d66; }
+
+  #env { font-size:13px; color:var(--muted); margin-bottom:16px; }
+  #env b { color:var(--ink); }
+  svg.trace { width:100%; height:130px; display:block; }
+  .note { font-size:12.5px; color:var(--muted); margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>BP+ Data Capture &mdash; test harness</h1>
+  <p class="sub">
+    The REDCap module's own page code, running outside REDCap. Nothing is sent
+    anywhere; the fields below are a stand-in for the record.
+  </p>
+
+  <div id="env">checking this browser&hellip;</div>
+  <div id="instrument-source" class="banner info" hidden></div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="transport">Device</label>
+        <select id="transport">
+          <option value="sim">Simulator &mdash; no hardware needed</option>
+          <option value="real">Real BP+ on a cable</option>
+        </select>
+      </div>
+      <div id="scenario-wrap">
+        <label for="scenario">Simulated outcome</label>
+        <select id="scenario">
+          <option value="success">A normal measurement</option>
+          <option value="outOfRange">A result with no blood pressure in it</option>
+          <option value="nibpError">A device error mid-measurement</option>
+          <option value="cancel">Cancelled at the device</option>
+        </select>
+      </div>
+      <div>
+        <label for="record">Record ID (sent as the patient ID)</label>
+        <input type="text" id="record" value="DEMO-001">
+      </div>
+      <div>
+        <label for="prefix">Field prefix</label>
+        <input type="text" id="prefix" value="bpplus_">
+      </div>
+    </div>
+    <div class="note">
+      Changing the device or the prefix reloads the page, because the module reads
+      both once at start-up &mdash; exactly as it does in REDCap.
+      <br><br>
+      <b>To test the resume:</b> choose <b>Real BP+</b>, connect once, then reload
+      this page. The module should come back connected without the picker &mdash;
+      which is what keeps an operator from reconnecting on every page of a survey.
+      The simulator cannot show this: it has no grant to pick back up.
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+
+      <div class="card card-instrument">
+        <h2>The instrument</h2>
+        <div id="instrument"></div>
+      </div>
+
+      <div class="card card-fields">
+        <h2>What REDCap would save</h2>
+        <div class="tablewrap">
+          <table class="fields">
+            <thead><tr><th>Field</th><th>Value</th></tr></thead>
+            <tbody id="fields"></tbody>
+          </table>
+        </div>
+        <div class="note" id="xml-note">The raw XML field is written by the server, not the page.</div>
+      </div>
+
+      <!--
+        The REDCap server, stood in for.
+
+        The module holds a recording during the measurement and files it when
+        the form is SAVED, because filing it earlier loses a race with the
+        submit: the file input on the page is empty, so REDCap writes that
+        emptiness over the doc id, and clearing a file field is how REDCap
+        deletes an edoc.
+
+        A harness that only answered the ajax call could not show that, so this
+        one has both halves, with a Save button for the step the browser
+        otherwise never sees.
+      -->
+      <div class="card card-standin">
+        <h2>REDCap stand-in &mdash; where the recording goes</h2>
+        <p class="note">
+          Nothing leaves the browser. Recordings are held in IndexedDB, so they
+          survive a reload the way the server's holding file survives a page
+          change.
+        </p>
+
+        <div class="row" style="margin:12px 0 6px">
+          <div style="flex:0 0 auto">
+            <button type="button" class="btn btn-primaryrc" id="em-save">Save the form</button>
+          </div>
+          <div style="flex:1 1 auto;align-self:center">
+            <span class="note" id="em-save-hint">Files whatever is held, the way a submit does.</span>
+          </div>
+        </div>
+
+        <div class="row" style="margin-bottom:10px">
+          <label style="flex:1 1 100%"><input type="checkbox" id="em-enabled" checked>
+            Storing the XML as a file is enabled for this project</label>
+          <label style="flex:1 1 100%"><input type="checkbox" id="em-fail-hold">
+            Make the next <b>hold</b> fail &mdash; the measurement keeps its numbers, the recording is lost</label>
+          <label style="flex:1 1 100%"><input type="checkbox" id="em-fail-file">
+            Make the next <b>filing</b> fail &mdash; the held file stays, and the next save tries again</label>
+        </div>
+
+        <div class="tablewrap">
+          <table id="em-table" class="record">
+            <thead><tr>
+              <th>state</th><th>filed under</th><th>bytes</th><th>sha-256</th><th></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="note" id="em-empty">Nothing held or filed yet.</p>
+        <p class="note"><a href="#" id="em-clear">Forget everything</a></p>
+      </div>
+
+      <div class="card card-cuff">
+        <h2>Cuff pressure</h2>
+        <div id="trace">
+          <p class="note">The decoded trace appears here after a measurement, if the
+             device recorded one. It is the proof the result was understood rather
+             than merely parsed.</p>
+        </div>
+      </div>
+
+    </div>
+    <div>
+
+      <div class="card card-conformance">
+        <h2>Conformance</h2>
+        <div id="checks"><p class="note">Checked after each measurement.</p></div>
+      </div>
+
+      <div class="card card-trace">
+        <h2>Serial trace</h2>
+        <pre id="log">nothing yet</pre>
+      </div>
+
+      <div class="card card-selftest">
+        <h2>SDK self-test</h2>
+        <button type="button" class="btn" id="selftest">Run the SDK self-test</button>
+        <div id="selftest-out"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// The harness is a module; the thing under test is not. js/bpplus-capture.js is
+// loaded as a classic script below, exactly as REDCap loads it.
+
+const SDK_URL = '../sdk/index.js';
+const sdk = await import(SDK_URL);
+
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+
+// -- Settings, carried in the URL so a reload keeps them ----------------------
+
+const settings = {
+  transport: params.get('transport') || 'sim',
+  scenario:  params.get('scenario')  || 'success',
+  record:    params.get('record')    || 'DEMO-001',
+  prefix:    params.get('prefix')    || 'bpplus_',
+};
+
+$('transport').value = settings.transport;
+$('scenario').value  = settings.scenario;
+$('record').value    = settings.record;
+$('prefix').value    = settings.prefix;
+$('scenario-wrap').hidden = settings.transport !== 'sim';
+
+for (const id of ['transport', 'scenario', 'prefix']) {
+  $(id).addEventListener('change', () => reloadWith({ [id]: $(id).value }));
+}
+// The record ID is read at measurement time, not at start-up, so it needs no
+// reload - it is the one setting an operator changes between participants.
+$('record').addEventListener('input', () => {
+  window.BPPLUS_CONFIG.record = $('record').value;
+});
+
+function reloadWith(changes) {
+  const next = new URLSearchParams({ ...settings, ...changes });
+  location.search = next.toString();
+}
+
+// -- What this browser can do -------------------------------------------------
+
+{
+  const pick = sdk.recommendedTransport();
+  const env = pick.environment;
+  const yes = v => v ? 'yes' : 'no';
+  $('env').innerHTML =
+    `<b>This browser:</b> Web Serial ${yes(env.webSerial)} &middot; ` +
+    `WebUSB ${yes(env.webUsb)} &middot; Bluetooth ${yes(env.webBluetooth)}` +
+    `${env.android ? ' &middot; Android' : ''}` +
+    `${env.secureContext ? '' : ' &middot; <b>not a secure context - the device APIs are unavailable</b>'}` +
+    `<br><b>A real BP+ would connect over:</b> ${pick.kind || 'nothing available'} &mdash; ${pick.reason}` +
+    `<br><b>SDK:</b> ${sdk.SDK_VERSION}, written against Terminal API ${sdk.TERMINAL_API_VERSION}`;
+}
+
+// -- The instrument ------------------------------------------------------------
+// Fetched from instruments/ when this page is served from the repository root,
+// so the markup under test is the markup that ships. Served on its own the
+// module has no access to that folder, and the fallback below stands in - which
+// is worth saying out loud, because the two drifting apart is precisely the
+// failure this is meant to catch.
+
+const SHARED_INSTRUMENT = '../../../instruments/bpplus_measurement/instrument.html';
+
+const FALLBACK_INSTRUMENT = `
+  <div id="bpplus-status" style="margin-bottom:12px;"></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+    <button type="button" id="bpplus-connect" class="btn btn-primaryrc">Connect BP+</button>
+    <button type="button" id="bpplus-measure" class="btn btn-primaryrc" disabled>Measure</button>
+    <button type="button" id="bpplus-cancel" class="btn btn-defaultrc" disabled>Cancel</button>
+    <button type="button" id="bpplus-ping" class="btn btn-defaultrc" disabled>Check device</button>
+  </div>
+  <div id="bpplus-alerts" style="display:none;"></div>
+  <div id="bpplus-results"></div>
+  <div id="bpplus-device-info"></div>`;
+
+async function loadInstrument() {
+  const banner = $('instrument-source');
+  try {
+    const reply = await fetch(SHARED_INSTRUMENT);
+    if (!reply.ok) throw new Error('HTTP ' + reply.status);
+    const html = (await reply.text()).replace(/<!--[\s\S]*?-->/g, '');
+    banner.hidden = false;
+    banner.className = 'banner info';
+    banner.textContent = 'Instrument markup loaded from instruments/bpplus_measurement/instrument.html - this is the markup that ships.';
+    return html;
+  } catch {
+    banner.hidden = false;
+    banner.className = 'banner warn';
+    banner.textContent =
+      'instruments/bpplus_measurement/instrument.html could not be fetched, so a copy built into this page is being used. ' +
+      'Serve the repository root to test the markup that actually ships.';
+    return FALLBACK_INSTRUMENT;
+  }
+}
+
+const FIELD_SUFFIXES = [
+  'sys', 'dia', 'map', 'hr', 'csys', 'cdia', 'ai', 'snr',
+  'irregular', 'datetime', 'guid', 'device_id', 'status', 'xml', 'xml_text',
+];
+const fieldName = suffix => settings.prefix + suffix;
+
+$('instrument').innerHTML = await loadInstrument();
+
+// One hidden input per field, plus the radio the module clicks rather than sets.
+// Hidden rather than visible: the table below is the readable view, and two
+// copies of the same value invite the question of which one REDCap saves.
+{
+  const holder = document.createElement('div');
+  holder.hidden = true;
+  holder.innerHTML = FIELD_SUFFIXES
+    .filter(s => s !== 'irregular')
+    .map(s => `<input type="hidden" name="${fieldName(s)}" value="">`)
+    .join('') +
+    ['1', '0'].map(v =>
+      `<label id="opt-${fieldName('irregular')}_${v}">
+         <input type="radio" name="${fieldName('irregular')}" value="${v}">
+       </label>`).join('');
+  document.body.appendChild(holder);
+
+  // REDCap records a radio only when the option is clicked, so the module clicks
+  // it. Here the label has to pass that on to the input it wraps.
+  for (const v of ['1', '0']) {
+    document.getElementById(`opt-${fieldName('irregular')}_${v}`)
+      .addEventListener('click', function () { this.querySelector('input').checked = true; renderFields(); });
+  }
+}
+
+// -- The record, as the module leaves it --------------------------------------
+
+function currentValues() {
+  const out = {};
+  for (const suffix of FIELD_SUFFIXES) {
+    const name = fieldName(suffix);
+    if (suffix === 'irregular') {
+      const on = document.querySelector(`[name="${name}"]:checked`);
+      out[name] = on ? on.value : '';
+    } else {
+      const el = document.querySelector(`[name="${name}"]`);
+      out[name] = el ? el.value : '';
+    }
+  }
+  return out;
+}
+
+/**
+ * One row per field, as REDCap would save it.
+ *
+ * A value is summarised rather than dumped. <prefix>xml_text holds the reduced
+ * recording when file storage is off -- thousands of characters of XML -- and a
+ * hundred-odd of them in a table cell is neither readable nor informative. What
+ * a reader wants there is what it is and how big, and the answer is one line.
+ */
+function describeValue(value) {
+  if (value === '') return '(empty)';
+
+  // A document, not a value. Say so, with its size.
+  if (value.startsWith('<?xml') || value.startsWith('<BPplus')) {
+    return value.length.toLocaleString() + ' characters of XML — the reduced recording';
+  }
+
+  return value.length > 90 ? value.slice(0, 90) + '…' : value;
+}
+
+function renderFields() {
+  const values = currentValues();
+  $('fields').innerHTML = Object.entries(values).map(([name, value]) => {
+    return `<tr class="${value === '' ? 'empty' : ''}">` +
+           `<td class="name">${name}</td>` +
+           `<td class="val" title="${escapeHtml(value.slice(0, 400))}">` +
+           `${escapeHtml(describeValue(value))}</td></tr>`;
+  }).join('');
+}
+renderFields();
+
+// -- The transport the module will ask for ------------------------------------
+
+window.BPPLUS_CONFIG = {
+  record: settings.record,
+  fieldPrefix: settings.prefix,
+  // Passed explicitly for the same reason the server passes it: this page is not
+  // in the same folder as the module's script, so a relative import would
+  // resolve against the wrong directory.
+  sdkUrl: new URL(SDK_URL, location.href).href,
+  saveXmlAsFile: true,
+  clockToleranceMinutes: 5,
+  requiredMode: null,
+  hostStartedOnly: false,
+  trace: false,
+};
+
+window.BPPLUS_TRANSPORT = function (api, options) {
+  // options.silent has to be honoured, or this harness cannot test the thing it
+  // exists to test. The module asks for a silent transport when it tries to pick
+  // a granted device back up after a page load; a hook that drops the flag sends
+  // it to the picker, the browser refuses without a user gesture, and the resume
+  // looks broken here while working perfectly in REDCap.
+  //
+  // That is the worst way for a test rig to be wrong, so test/smoke.mjs reads
+  // this function and fails if any transport is built without the flag.
+  options = options || {};
+  const silent = options.silent === true;
+
+  if (settings.transport === 'sim') {
+    // The simulator has no grant to pick back up, so a silent request has to
+    // fail here the way it would with a real device nobody has connected yet.
+    //
+    // Left to itself the simulator opens whatever it is asked, silent or not,
+    // and the page loads already "reconnected" -- the harness reporting a resume
+    // that never happened, which is the same rig-lying-to-you failure in the
+    // opposite direction. Refusing keeps Connect on screen, which is what an
+    // operator actually sees at the start of a session.
+    if (silent) throw new Error('the simulator has nothing to resume');
+    return new api.SimulatorTransport({ scenario: settings.scenario });
+  }
+  const pick = api.recommendedTransport();
+  if (pick.kind === api.TransportKind.usbSerial) return new api.UsbSerialTransport({ silent });
+  return new api.WebSerialTransport({ filters: null, silent });
+};
+
+/**
+ * The REDCap server, stood in for -- both halves of it.
+ *
+ * REDCap publishes the real module object from
+ * initializeJavascriptModuleObject(). Nothing here does, so this catches the
+ * call the module makes and answers in the same shape.
+ *
+ * The important part is that it does NOT file the recording when asked. It
+ * holds it, exactly as BpPlusDataCapture.php does, and files it only when the
+ * form is saved -- which here is a button, because a static page has no submit
+ * to hook. Without that second half the harness could show a recording being
+ * handed over and never show it arriving, which is the whole point of the
+ * design: filing during the measurement loses a race with the submit, and the
+ * edoc is deleted by the very save that was meant to keep it.
+ *
+ * What this proves: that the module hands over the whole recording, under the
+ * record, event and instance REDCap would file it against, and that a failed
+ * filing does not throw it away. What it cannot prove is that
+ * REDCap::storeFile() accepts it. That needs a real project.
+ */
+
+const EM_DB = 'bpplus-harness-recordings';
+let emDb = null;
+let emNextDocId = 1000;
+
+function emOpen() {
+  if (emDb) return Promise.resolve(emDb);
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(EM_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('recordings', { keyPath: 'id' });
+    request.onsuccess = () => { emDb = request.result; resolve(emDb); };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function emPut(row) {
+  const db = await emOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('recordings', 'readwrite');
+    tx.objectStore('recordings').put(row);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function emAll() {
+  const db = await emOpen();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction('recordings', 'readonly').objectStore('recordings').getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function emClear() {
+  const db = await emOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('recordings', 'readwrite');
+    tx.objectStore('recordings').clear();
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The key the server holds a recording under.
+ *
+ * Mirrors stashPath() in the PHP: project, record, event, instance and field.
+ * Two measurements on the same instance replace each other, which is what
+ * repeating a measurement is meant to do; two instances do not.
+ */
+function emKey(cfg, field) {
+  return [cfg.pid || '0', cfg.record, cfg.event_id || '1',
+          cfg.repeat_instance || '1', field].join('|');
+}
+
+window.BPPLUS_MODULE = {
+  async ajax(action, payload) {
+    const cfg = window.BPPLUS_CONFIG || {};
+    if (action !== 'save-xml') return { status: 'error', message: 'Unknown action.' };
+
+    if (!$('em-enabled').checked) {
+      return { status: 'error', message: 'Storing the XML as a file is not enabled for this project.' };
+    }
+
+    // BPPLUS_FAIL_SAVE is kept because the smoke checks and earlier notes use it.
+    if (window.BPPLUS_FAIL_SAVE || $('em-fail-hold').checked) {
+      $('em-fail-hold').checked = false;       // one failure, so a repeat can succeed
+      return { status: 'error', message: 'simulated: the server could not hold the recording' };
+    }
+
+    const xml = payload.xml || '';
+    if (!xml.includes('<BPplus')) {
+      return { status: 'error', message: 'That does not look like a BP+ measurement.' };
+    }
+
+    const field = fieldName('xml');
+    const bytes = new TextEncoder().encode(xml).length;
+    const sha256 = await sha256Hex(xml);
+
+    await emPut({
+      id: emKey(cfg, field),
+      state: 'held',
+      record: String(cfg.record),
+      event_id: String(cfg.event_id || '1'),
+      instance: String(cfg.repeat_instance || '1'),
+      field, bytes, sha256, xml,
+      docId: null,
+      at: new Date().toISOString(),
+    });
+
+    lastXml = xml;
+    renderEm();
+
+    return {
+      status: 'held', field, bytes, sha256,
+      filename: cfg.record + '_i' + (cfg.repeat_instance || 1) + '_bpplus.xml',
+    };
+  },
+};
+
+/**
+ * The submit, and redcap_save_record() after it.
+ *
+ * A failed filing leaves the held recording exactly where it is, so pressing
+ * Save again retries. That is the module's real behaviour and it is invisible
+ * without a way to fail on purpose.
+ */
+async function emSaveForm() {
+  const held = (await emAll()).filter(row => row.state === 'held');
+
+  if (!held.length) {
+    $('em-save-hint').innerHTML =
+      'Nothing was held, so the save filed nothing &mdash; which is what an ' +
+      'ordinary page save does.';
+    return;
+  }
+
+  if ($('em-fail-file').checked) {
+    $('em-fail-file').checked = false;
+    $('em-save-hint').innerHTML =
+      '<b>Filing failed.</b> The ' + held.length + ' held recording' +
+      (held.length === 1 ? '' : 's') + ' stayed put, so saving again retries. ' +
+      'Nothing was discarded &mdash; by this point the browser has nothing left to resend.';
+    renderEm();
+    return;
+  }
+
+  for (const row of held) {
+    row.state = 'filed';
+    row.docId = emNextDocId++;
+    row.filedAt = new Date().toISOString();
+    await emPut(row);
+  }
+
+  $('em-save-hint').innerHTML =
+    'Filed ' + held.length + ' recording' + (held.length === 1 ? '' : 's') +
+    ' onto the record, after the save &mdash; which is the only order that survives.';
+  renderEm();
+}
+
+async function renderEm() {
+  const rows = (await emAll()).sort((a, b) => (a.at < b.at ? 1 : -1));
+  $('em-empty').style.display = rows.length ? 'none' : '';
+
+  $('em-table').querySelector('tbody').innerHTML = rows.map(row => {
+    const url = URL.createObjectURL(new Blob([row.xml], { type: 'application/xml' }));
+    const state = row.state === 'filed'
+      ? '<span style="color:var(--ok);font-weight:600">filed</span> ' +
+        '<span class="note">doc ' + row.docId + '</span>'
+      : '<span style="color:var(--warn);font-weight:600">held</span> ' +
+        '<span class="note">awaiting the save</span>';
+
+    return '<tr>' +
+      '<td>' + state + '</td>' +
+      '<td>' + escapeHtml(row.record) + ' &middot; event ' + escapeHtml(row.event_id) +
+        ' &middot; instance ' + escapeHtml(row.instance) +
+        '<br><span class="note">' + escapeHtml(row.field) + '</span></td>' +
+      '<td style="text-align:right">' + row.bytes.toLocaleString() + '</td>' +
+      '<td><code title="' + row.sha256 + '">' + row.sha256.slice(0, 12) + '&hellip;</code></td>' +
+      '<td><a href="' + url + '" download="' + escapeHtml(row.record) + '_bpplus.xml">save</a> &middot; ' +
+        '<a href="' + url + '" target="_blank" rel="noopener">open</a></td>' +
+      '</tr>';
+  }).join('');
+}
+
+let lastXml = '';
+
+$('em-save').addEventListener('click', emSaveForm);
+$('em-clear').addEventListener('click', async event => {
+  event.preventDefault();
+  await emClear();
+  $('em-save-hint').textContent = 'Files whatever is held, the way a submit does.';
+  renderEm();
+});
+renderEm();
+
+// -- The serial trace ----------------------------------------------------------
+// Every line in and out. Attached after the module connects, because the device
+// object does not exist until then.
+
+const lines = [];
+
+function watchDevice() {
+  const device = window.BPPLUS && window.BPPLUS.device;
+  if (!device || device.__harnessWatched) return;
+  device.__harnessWatched = true;
+
+  device.on('log', entry => {
+    lines.push({ dir: entry.dir, text: entry.text });
+    if (lines.length > 400) lines.shift();
+    $('log').innerHTML = lines.map(l =>
+      `<span class="${l.dir}">${l.dir === 'tx' ? '>' : '<'} ${escapeHtml(l.text)}</span>`
+    ).join('\n');
+    $('log').scrollTop = $('log').scrollHeight;
+  });
+}
+
+// The module owns the connect button, so there is no event to hang this on. One
+// poll is cheaper than a hook the module would have to carry for the harness.
+setInterval(watchDevice, 400);
+
+// -- Conformance ---------------------------------------------------------------
+// Not a repeat of the module's own checks. These ask a different question: did
+// the numbers reach the fields intact, and does what was stored agree with what
+// the device actually said?
+
+document.addEventListener('bpplus:measurement', event => {
+  renderFields();
+  runChecks(event.detail.measurement);
+  drawTrace(event.detail.measurement);
+});
+
+function runChecks(m) {
+  const values = currentValues();
+  const out = [];
+  const check = (ok, name, detail = '') =>
+    out.push({ ok, name, detail });
+
+  check(m.crcOk !== false, 'the result passed its checksum');
+
+  check(String(m.brachial.sys) === values[fieldName('sys')],
+    'systolic reached the field intact',
+    `device ${m.brachial.sys}, field "${values[fieldName('sys')]}"`);
+  check(String(m.brachial.dia) === values[fieldName('dia')],
+    'diastolic reached the field intact',
+    `device ${m.brachial.dia}, field "${values[fieldName('dia')]}"`);
+  check(String(m.central.cSys) === values[fieldName('csys')],
+    'central systolic reached the field intact',
+    `device ${m.central.cSys}, field "${values[fieldName('csys')]}"`);
+
+  // The stored timestamp is reformatted for REDCap - the device writes an ISO
+  // T where REDCap wants a space - so this checks that only the separator moved.
+  // A conversion that silently shifts an hour is exactly the kind of thing
+  // nobody notices until the data is analysed, so the comparison is on the
+  // digits themselves rather than on a Date either side parsed the same way.
+  {
+    const stored = values[fieldName('datetime')];
+    const digits = s => String(s).replace(/[^0-9]/g, '');
+    check(digits(stored) === digits(m.timestamp).padEnd(14, '0') &&
+          /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(stored),
+      'the device timestamp is REDCap-formatted and otherwise unchanged',
+      `device ${m.timestamp}, field "${stored}"`);
+  }
+
+  const rhythm = m.rhythm;
+  if (rhythm.known) {
+    check(values[fieldName('irregular')] === (rhythm.irregular ? '1' : '0'),
+      'the irregular-rhythm radio matches sPRV',
+      `sPRV ${rhythm.sPRV} ms, field "${values[fieldName('irregular')]}"`);
+  } else {
+    out.push({ skip: true, name: 'irregular rhythm: the device did not report sPRV' });
+  }
+
+  check(values[fieldName('status')] === 'complete', 'the capture status was set');
+  check(values[fieldName('guid')] === String(m.guid), 'the measurement GUID was stored');
+
+  const trace = m.cuffRecording(0);
+  if (trace.found) {
+    check(trace.mmHg.length > 0, `the cuff recording decoded (${trace.mmHg.length} samples at ${trace.sampleRate} Hz)`);
+  } else {
+    out.push({ skip: true, name: 'cuff recording: ' + trace.reason });
+  }
+
+  $('checks').innerHTML = out.map(r => {
+    const cls = r.skip ? 'skip' : (r.ok ? 'pass' : 'fail');
+    const detail = !r.skip && !r.ok && r.detail ? ` <b>${escapeHtml(r.detail)}</b>` : '';
+    return `<div class="check ${cls}">${escapeHtml(r.name)}${detail}</div>`;
+  }).join('');
+}
+
+// -- The cuff trace ------------------------------------------------------------
+// Inline SVG rather than a charting library: one dependency fewer to vendor, and
+// nothing here needs axes, tooltips or a legend.
+
+function drawTrace(m) {
+  const trace = m.cuffRecording(0);
+  if (!trace.found || !trace.mmHg.length) {
+    $('trace').innerHTML = `<p class="note">${escapeHtml(trace.reason || 'No cuff recording in this result.')}</p>`;
+    return;
+  }
+
+  const data = trace.mmHg;
+  const width = 1000, height = 130, step = Math.max(1, Math.floor(data.length / width));
+
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < data.length; i += step) {
+    if (data[i] < min) min = data[i];
+    if (data[i] > max) max = data[i];
+  }
+  const span = (max - min) || 1;
+
+  let d = '';
+  let x = 0;
+  for (let i = 0; i < data.length; i += step, x++) {
+    const y = height - ((data[i] - min) / span) * (height - 8) - 4;
+    d += (x === 0 ? 'M' : 'L') + x + ' ' + y.toFixed(1);
+  }
+
+  const seconds = (data.length / trace.sampleRate).toFixed(1);
+  $('trace').innerHTML =
+    `<svg class="trace" viewBox="0 0 ${x} ${height}" preserveAspectRatio="none" aria-label="cuff pressure trace">
+       <path d="${d}" fill="none" stroke="#0b5394" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+     </svg>
+     <p class="note">${data.length.toLocaleString()} samples at ${trace.sampleRate} Hz &mdash; ${seconds} s,
+        ${min.toFixed(0)} to ${max.toFixed(0)} mmHg. Decoded from the base64 in the result XML.</p>`;
+}
+
+// -- The SDK self-test ---------------------------------------------------------
+
+$('selftest').addEventListener('click', async () => {
+  const button = $('selftest');
+  button.disabled = true;
+  $('selftest-out').innerHTML = '<p class="note">running&hellip;</p>';
+  try {
+    const { run } = await import('../sdk/selftest.js');
+    const outcome = await run();
+    $('selftest-out').innerHTML =
+      `<p class="note">${outcome.passed}/${outcome.total} passed, ${outcome.failed} failed</p>` +
+      `<pre>${escapeHtml(outcome.lines.join('\n'))}</pre>`;
+  } catch (error) {
+    $('selftest-out').innerHTML = `<p class="check fail">${escapeHtml(String(error))}</p>`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+// -- Helpers -------------------------------------------------------------------
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Refresh the table on anything the module changes, so a field written outside a
+// measurement - the capture status, say - is visible too.
+document.addEventListener('change', renderFields, true);
+
+// -- Load the module under test -------------------------------------------------
+//
+// As a classic script with no type="module", because that is how REDCap loads
+// it. Loaded from here rather than from a <script defer> tag in the markup, so
+// that it cannot run before the instrument exists: this setup module uses
+// top-level await, and a deferred classic script does not wait for one.
+//
+// The module starts on DOMContentLoaded. Adding the script dynamically means
+// that event may already have fired, in which case it never would - so it is
+// dispatched once, and only when the real one has been and gone.
+
+await new Promise((resolve, reject) => {
+  const script = document.createElement('script');
+  script.src = '../js/bpplus-capture.js';
+  script.onload = resolve;
+  script.onerror = () => reject(new Error('could not load ../js/bpplus-capture.js'));
+  document.body.appendChild(script);
+});
+
+if (document.readyState !== 'loading') {
+  document.dispatchEvent(new Event('DOMContentLoaded'));
+}
+</script>
+</body>
+</html>

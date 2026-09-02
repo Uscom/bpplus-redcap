@@ -1,0 +1,19 @@
+# One line ending everywhere: LF in the repository AND in the working tree.
+#
+# core.autocrlf is true on the machines this is worked on, which stores LF and
+# checks out CRLF. Harmless in itself, but it means a file written by a tool (LF)
+# and the same file after a checkout (CRLF) differ byte for byte -- which breaks
+# any md5 or sha verification of a deployed copy, makes every checkout look like
+# it changed every file, and would make the SDK provenance hash in
+# sdk/SDK-VERSION.json disagree with itself on a different machine.
+#
+# LF is also what is served: the harness runs from a static web root, and the
+# modules run inside REDCap on Linux.
+* text=auto eol=lf
+
+
+# Binary, and not to be touched.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.zip binary

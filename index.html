@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BP+ in REDCap</title>
+
+<!--
+  The landing page, served by GitHub Pages from the repository root.
+
+  Pages is HTTPS, which is the secure context Web Serial and WebUSB require - so
+  this is a link a researcher can open on the machine and the tablet they intend
+  to use, with a real BP+ on the cable, before anyone has installed anything.
+
+  It links into each module's own harness rather than carrying a copy. One copy
+  of the thing under test, and it is the copy that ships.
+-->
+
+<style>
+  :root {
+    --ink:#1c2430; --muted:#5d6b7a; --line:#d8dee6; --ground:#f6f8fa;
+    --accent:#0b5394; --panel:#fff;
+    --warn-bg:#fff8e1; --warn-line:#ffe082; --warn-ink:#8a6100;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:48px 22px 90px; }
+  h1 { font-size:28px; margin:0 0 6px; letter-spacing:-0.015em; }
+  h2 { font-size:13px; margin:38px 0 12px; text-transform:uppercase;
+       letter-spacing:.08em; color:var(--muted); font-weight:600; }
+  p.sub { color:var(--muted); margin:0 0 6px; font-size:17px; }
+
+  a.go { display:block; background:var(--panel); border:1px solid var(--line);
+         border-left:4px solid var(--accent); border-radius:10px;
+         padding:18px 20px; margin-bottom:12px; text-decoration:none; color:inherit; }
+  a.go:hover { border-color:var(--accent); }
+  a.go b { display:block; color:var(--accent); font-size:17px; margin-bottom:3px; }
+  a.go span { color:var(--muted); font-size:14.5px; }
+
+  ul.plain { list-style:none; padding:0; margin:0; }
+  ul.plain li { padding:7px 0; border-bottom:1px solid var(--line); font-size:15px; }
+  ul.plain li:last-child { border-bottom:0; }
+  ul.plain a { color:var(--accent); text-decoration:none; }
+  ul.plain a:hover { text-decoration:underline; }
+  ul.plain span { color:var(--muted); }
+
+  .note { background:var(--warn-bg); border:1px solid var(--warn-line);
+          color:var(--warn-ink); border-radius:8px; padding:14px 16px;
+          font-size:14.5px; margin-top:26px; }
+  #env { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+         padding:14px 18px; margin:22px 0 30px; font-size:14.5px; color:var(--muted); }
+  #env b { color:var(--ink); }
+  footer { margin-top:44px; font-size:14px; color:var(--muted); }
+  footer a { color:var(--accent); }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:.92em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>BP+ in REDCap</h1>
+  <p class="sub">
+    External modules for recording a <b>Uscom BP+</b> measurement directly into a
+    REDCap record &mdash; central pressures, brachial pressures, and the device's
+    own result file.
+  </p>
+  <p class="sub">
+    Everything here is an example, meant to be copied and edited.
+  </p>
+
+  <div id="env">checking this browser&hellip;</div>
+
+  <h2>Try it, with nothing installed</h2>
+
+  <a class="go" href="modules/bpplus_data_capture/test/harness.html?transport=sim">
+    <b>Open the test harness &mdash; simulator &rarr;</b>
+    <span>The module's own page code, running outside REDCap against a simulated
+          device. No hardware, no REDCap, no installation.</span>
+  </a>
+
+  <a class="go" href="modules/bpplus_data_capture/test/harness.html?transport=real">
+    <b>Open the test harness &mdash; real BP+ &rarr;</b>
+    <span>The same page, driving a device on the cable. Chrome or Edge, desktop or
+          Android tablet.</span>
+  </a>
+
+  <h2>Then</h2>
+  <ul class="plain">
+    <li><a href="https://github.com/uscom/bpplus-redcap/tree/main/docs/getting-started.md">Getting started</a>
+        <span>&mdash; four routes in, depending on where you already are</span></li>
+    <li><a href="https://github.com/uscom/bpplus-redcap/tree/main/demo-project">A working project</a>
+        <span>&mdash; one XML upload creates it</span></li>
+    <li><a href="https://github.com/uscom/bpplus-redcap/tree/main/instruments/bpplus_measurement">The instrument</a>
+        <span>&mdash; to add to a project you already have</span></li>
+    <li><a href="https://github.com/uscom/bpplus-redcap/tree/main/docs/installing.md">Installing the module</a>
+        <span>&mdash; for the REDCap administrator</span></li>
+    <li><a href="https://github.com/uscom/bpplus-redcap/tree/main/docs/versioning.md">Versioning</a>
+        <span>&mdash; how a study that runs for years pins a version</span></li>
+    <li><a href="https://github.com/uscom/bpplus-redcap">The repository</a>
+        <span>&mdash; source, releases, issues</span></li>
+  </ul>
+
+  <div class="note">
+    A bench tool, not a place for participant data. The harness fills a copy of
+    the REDCap fields on the page and sends nothing anywhere.
+  </div>
+
+  <footer>
+    MIT licensed &middot; <a href="https://github.com/uscom/bpplus-redcap">github.com/uscom/bpplus-redcap</a>
+  </footer>
+
+</div>
+
+<script type="module">
+  // Reported here rather than only inside the harness, because "will this work
+  // on the tablet the study is buying" is a question worth answering before
+  // anyone opens anything else.
+  import { recommendedTransport } from './modules/bpplus_data_capture/sdk/index.js';
+
+  const pick = recommendedTransport();
+  const env = pick.environment;
+  const yes = v => v ? 'yes' : 'no';
+
+  document.getElementById('env').innerHTML =
+    `<b>This browser:</b> Web Serial ${yes(env.webSerial)} &middot; ` +
+    `WebUSB ${yes(env.webUsb)} &middot; Bluetooth ${yes(env.webBluetooth)}` +
+    `${env.android ? ' &middot; Android' : ''}` +
+    `${env.secureContext ? '' : ' &middot; <b>not a secure context &mdash; the device APIs are unavailable here</b>'}` +
+    `<br><b>A BP+ would connect over:</b> ${pick.kind || 'nothing available'} &mdash; ${pick.reason}`;
+</script>
+</body>
+</html>

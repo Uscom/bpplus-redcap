@@ -1,0 +1,81 @@
+{
+  "name": "BP+ Data Capture",
+  "namespace": "Uscom\\BpPlusDataCapture",
+  "description": "Records a blood-pressure measurement from a Uscom BP+ device directly into a REDCap instrument, and keeps the device's own result XML as a file on the record. An example module, meant to be copied and edited.",
+  "version": "1.0.0",
+  "documentation": "README.md",
+  "authors": [
+    {
+      "name": "Richard Scott",
+      "email": "richard.scott@uscom.com.au",
+      "institution": "Uscom Ltd"
+    }
+  ],
+
+  "framework-version": 15,
+
+  "compatibility": {
+    "php-version-min": "8.0.0",
+    "redcap-version-min": "13.1.0"
+  },
+
+  "permissions": [],
+
+  "$comment-ajax": [
+    "An ajax action must be declared for the context it is called from, and a",
+    "survey respondent is not logged in -- so save-xml is in both lists.",
+    "Undeclared, the framework refuses the call and the recording is silently",
+    "never filed."
+  ],
+  "no-auth-ajax-actions": ["save-xml"],
+  "auth-ajax-actions": ["save-xml"],
+
+  "enable-every-page-hooks-on-system-pages": false,
+
+  "project-settings": [
+    {
+      "key": "capture-instrument",
+      "name": "<b>Instrument that carries the BP+ controls</b><br>The unique instrument name, not its label. Blank uses <code>bpplus_measurement</code>.",
+      "type": "form-list",
+      "required": false
+    },
+    {
+      "key": "field-prefix",
+      "name": "<b>Field-name prefix</b><br>The module writes <code>&lt;prefix&gt;sys</code>, <code>&lt;prefix&gt;dia</code> and the rest. Blank uses <code>bpplus_</code>. Change it only if the fields on your instrument are named differently.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "save-xml-file",
+      "name": "<b>Store the raw measurement XML as a file on the record</b><br>Needs a File Upload field named <code>&lt;prefix&gt;xml</code>. A full result runs past 100&nbsp;kB, which no text field will hold, so this is where the XML belongs.",
+      "type": "checkbox"
+    },
+    {
+      "key": "clock-tolerance-minutes",
+      "name": "<b>Set the device clock from this computer when it is out by more than this many minutes</b><br>Blank uses 5. The measurement timestamp comes from the device, so a wrong clock mislabels data permanently.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "require-mode",
+      "name": "<b>Require the device to be in a particular measurement mode</b><br>Refuses to measure when the BP+ reports something else. Leave as <i>Any mode</i> unless the protocol depends on it.",
+      "type": "dropdown",
+      "required": false,
+      "choices": [
+        { "value": "",  "name": "Any mode" },
+        { "value": "1", "name": "BP+ (suprasystolic, single measurement)" },
+        { "value": "5", "name": "BP+ AOBP (averaged, unattended)" }
+      ]
+    },
+    {
+      "key": "host-started-only",
+      "name": "<b>Refuse a measurement started on the device itself</b><br>A measurement begun with the BP+'s own Start button carries no patient ID and belongs to no record. On, the module cancels it and says so.",
+      "type": "checkbox"
+    },
+    {
+      "key": "trace",
+      "name": "<b>Log every serial line to the browser console</b><br>Troubleshooting only.",
+      "type": "checkbox"
+    }
+  ]
+}

@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:redcap="https://projectredcap.org" xsi:schemaLocation="http://www.cdisc.org/ns/odm/v1.3 schema/odm/ODM1-3-1.xsd" ODMVersion="1.3.1" FileOID="000-00-0000" FileType="Snapshot" Description="BP+ Data Capture demo" AsOfDateTime="2026-09-02T00:00:00" CreationDateTime="2026-09-02T00:00:00" SourceSystem="REDCap" SourceSystemVersion="15.0.0">
+<Study OID="Project.BPplusDataCaptureDemo">
+<GlobalVariables>
+	<StudyName>BP+ Data Capture demo</StudyName>
+	<StudyDescription>A worked example instrument for the BP+ Data Capture external module.</StudyDescription>
+	<ProtocolName>BP+ Data Capture demo</ProtocolName>
+	<redcap:RecordAutonumberingEnabled>1</redcap:RecordAutonumberingEnabled>
+	<redcap:CustomRecordLabel></redcap:CustomRecordLabel>
+	<redcap:SecondaryUniqueField></redcap:SecondaryUniqueField>
+	<redcap:SchedulingEnabled>0</redcap:SchedulingEnabled>
+	<redcap:SurveysEnabled>0</redcap:SurveysEnabled>
+	<redcap:SurveyInvitationEmailField></redcap:SurveyInvitationEmailField>
+	<redcap:Purpose>0</redcap:Purpose>
+	<redcap:PurposeOther></redcap:PurposeOther>
+	<redcap:ProjectNotes>A worked example for the BP+ Data Capture external module.
+
+Install and enable the module on this project, then open the BP+ measurement instrument on any record and press Connect BP+.
+
+The BP+ measurement instrument repeats, so a participant can be measured more than once. To keep the device result file as well, turn on &quot;Store the raw measurement XML as a file&quot; in the module settings -- the bpplus_xml field is already here for it.
+
+This project is a starting point and is meant to be edited.</redcap:ProjectNotes>
+	<redcap:MissingDataCodes></redcap:MissingDataCodes>
+	<redcap:RepeatingInstrumentsAndEvents>
+		<redcap:RepeatingInstruments>
+			<redcap:RepeatingInstrument redcap:UniqueEventName="event_1_arm_1" redcap:RepeatInstrument="bpplus_measurement" redcap:CustomLabel=""/>
+		</redcap:RepeatingInstruments>
+	</redcap:RepeatingInstrumentsAndEvents>
+</GlobalVariables>
+<MetaDataVersion OID="Metadata.BPplusDataCaptureDemo" Name="BP+ Data Capture demo" redcap:RecordIdField="record_id">
+	<FormDef OID="Form.participant" Name="Participant" Repeating="No" redcap:FormName="participant">
+		<ItemGroupRef ItemGroupOID="participant.record_id" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="participant.participant_complete" Mandatory="No"/>
+	</FormDef>
+	<FormDef OID="Form.bpplus_measurement" Name="Bpplus Measurement" Repeating="No" redcap:FormName="bpplus_measurement">
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_intro" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_sys" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_dia" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_csys" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_cdia" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_datetime" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_guid" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_xml_text" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_xml" Mandatory="No"/>
+		<ItemGroupRef ItemGroupOID="bpplus_measurement.bpplus_measurement_complete" Mandatory="No"/>
+	</FormDef>
+	<ItemGroupDef OID="participant.record_id" Name="Participant" Repeating="No">
+		<ItemRef ItemOID="record_id" Mandatory="No" redcap:Variable="record_id"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="participant.participant_complete" Name="Form Status" Repeating="No">
+		<ItemRef ItemOID="participant_complete" Mandatory="No" redcap:Variable="participant_complete"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_intro" Name="BP+ measurement" Repeating="No">
+		<ItemRef ItemOID="bpplus_intro" Mandatory="No" redcap:Variable="bpplus_intro"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_sys" Name="Brachial pressures" Repeating="No">
+		<ItemRef ItemOID="bpplus_sys" Mandatory="No" redcap:Variable="bpplus_sys"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_dia" Name="Bpplus Measurement" Repeating="No">
+		<ItemRef ItemOID="bpplus_dia" Mandatory="No" redcap:Variable="bpplus_dia"/>
+		<ItemRef ItemOID="bpplus_map" Mandatory="No" redcap:Variable="bpplus_map"/>
+		<ItemRef ItemOID="bpplus_hr" Mandatory="No" redcap:Variable="bpplus_hr"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_csys" Name="Central pressures and indices" Repeating="No">
+		<ItemRef ItemOID="bpplus_csys" Mandatory="No" redcap:Variable="bpplus_csys"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_cdia" Name="Bpplus Measurement" Repeating="No">
+		<ItemRef ItemOID="bpplus_cdia" Mandatory="No" redcap:Variable="bpplus_cdia"/>
+		<ItemRef ItemOID="bpplus_ai" Mandatory="No" redcap:Variable="bpplus_ai"/>
+		<ItemRef ItemOID="bpplus_snr" Mandatory="No" redcap:Variable="bpplus_snr"/>
+		<ItemRef ItemOID="bpplus_irregular" Mandatory="No" redcap:Variable="bpplus_irregular"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_datetime" Name="Provenance -- written by the device, not by the operator" Repeating="No">
+		<ItemRef ItemOID="bpplus_datetime" Mandatory="No" redcap:Variable="bpplus_datetime"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_guid" Name="Bpplus Measurement" Repeating="No">
+		<ItemRef ItemOID="bpplus_guid" Mandatory="No" redcap:Variable="bpplus_guid"/>
+		<ItemRef ItemOID="bpplus_device_id" Mandatory="No" redcap:Variable="bpplus_device_id"/>
+		<ItemRef ItemOID="bpplus_status" Mandatory="No" redcap:Variable="bpplus_status"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_xml_text" Name="The result file from the device" Repeating="No">
+		<ItemRef ItemOID="bpplus_xml_text" Mandatory="No" redcap:Variable="bpplus_xml_text"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_xml" Name="Bpplus Measurement" Repeating="No">
+		<ItemRef ItemOID="bpplus_xml" Mandatory="No" redcap:Variable="bpplus_xml"/>
+	</ItemGroupDef>
+	<ItemGroupDef OID="bpplus_measurement.bpplus_measurement_complete" Name="Form Status" Repeating="No">
+		<ItemRef ItemOID="bpplus_measurement_complete" Mandatory="No" redcap:Variable="bpplus_measurement_complete"/>
+	</ItemGroupDef>
+	<ItemDef OID="record_id" Name="record_id" DataType="text" Length="999" redcap:Variable="record_id" redcap:FieldType="text" redcap:FieldNote="Sent to the BP+ as the patient ID, so the measurement identifies itself in its own XML." redcap:SectionHeader="Participant">
+		<Question><TranslatedText>Record ID</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="participant_complete" Name="participant_complete" DataType="text" Length="1" redcap:Variable="participant_complete" redcap:FieldType="select" redcap:SectionHeader="Form Status">
+		<Question><TranslatedText>Complete?</TranslatedText></Question>
+		<CodeListRef CodeListOID="participant_complete.choices"/>
+	</ItemDef>
+	<ItemDef OID="bpplus_intro" Name="bpplus_intro" DataType="text" Length="999" redcap:Variable="bpplus_intro" redcap:FieldType="descriptive" redcap:SectionHeader="BP+ measurement">
+		<Question><TranslatedText>Loading the BP+ module... Connect BP+ Measure Cancel Check device</TranslatedText><redcap:FormattedTranslatedText>&lt;div id=&quot;bpplus-status&quot; style=&quot;margin-bottom:12px;&quot;&gt;Loading the BP+ module...&lt;/div&gt; &lt;div style=&quot;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;&quot;&gt; &lt;button type=&quot;button&quot; id=&quot;bpplus-connect&quot; class=&quot;btn btn-primaryrc&quot;&gt;Connect BP+&lt;/button&gt; &lt;button type=&quot;button&quot; id=&quot;bpplus-measure&quot; class=&quot;btn btn-primaryrc&quot; disabled&gt;Measure&lt;/button&gt; &lt;button type=&quot;button&quot; id=&quot;bpplus-cancel&quot; class=&quot;btn btn-defaultrc&quot; disabled&gt;Cancel&lt;/button&gt; &lt;button type=&quot;button&quot; id=&quot;bpplus-ping&quot; class=&quot;btn btn-defaultrc&quot; disabled&gt;Check device&lt;/button&gt; &lt;/div&gt; &lt;div id=&quot;bpplus-alerts&quot; style=&quot;display:none;&quot;&gt;&lt;/div&gt; &lt;div id=&quot;bpplus-results&quot;&gt;&lt;/div&gt; &lt;div id=&quot;bpplus-device-info&quot;&gt;&lt;/div&gt;</redcap:FormattedTranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_sys" Name="bpplus_sys" DataType="integer" Length="999" redcap:Variable="bpplus_sys" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it." redcap:SectionHeader="Brachial pressures">
+		<Question><TranslatedText>Brachial systolic (mmHg)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>40</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>300</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_dia" Name="bpplus_dia" DataType="integer" Length="999" redcap:Variable="bpplus_dia" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
+		<Question><TranslatedText>Brachial diastolic (mmHg)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>20</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (20 - 200). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>200</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (20 - 200). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_map" Name="bpplus_map" DataType="integer" Length="999" redcap:Variable="bpplus_map" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
+		<Question><TranslatedText>Brachial mean arterial pressure (mmHg)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>25</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (25 - 250). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>250</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (25 - 250). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_hr" Name="bpplus_hr" DataType="integer" Length="999" redcap:Variable="bpplus_hr" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
+		<Question><TranslatedText>Pulse rate (bpm)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>30</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (30 - 240). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>240</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (30 - 240). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_csys" Name="bpplus_csys" DataType="integer" Length="999" redcap:Variable="bpplus_csys" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Derived by the BP+ from the suprasystolic capture. Filled by the device -- do not type over it." redcap:SectionHeader="Central pressures and indices">
+		<Question><TranslatedText>Central systolic (mmHg)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>40</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>300</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_cdia" Name="bpplus_cdia" DataType="integer" Length="999" redcap:Variable="bpplus_cdia" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
+		<Question><TranslatedText>Central diastolic (mmHg)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>20</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (20 - 200). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>200</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (20 - 200). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_ai" Name="bpplus_ai" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_ai" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="sAI. Can legitimately be negative in a young participant.">
+		<Question><TranslatedText>Augmentation index (%)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>-50</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (-50 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>100</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (-50 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_snr" Name="bpplus_snr" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_snr" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="The raw number, not its quality band. A band that moved later would leave a stored label wrong with nothing to check it against.">
+		<Question><TranslatedText>Signal-to-noise ratio (dB)</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_irregular" Name="bpplus_irregular" DataType="text" Length="1" redcap:Variable="bpplus_irregular" redcap:FieldType="radio" redcap:FieldNote="From the pulse-rate variability measured during the suprasystolic capture. Left blank when the device did not report it.">
+		<Question><TranslatedText>Irregular rhythm detected</TranslatedText></Question>
+		<CodeListRef CodeListOID="bpplus_irregular.choices"/>
+	</ItemDef>
+	<ItemDef OID="bpplus_datetime" Name="bpplus_datetime" DataType="datetime" Length="999" redcap:Variable="bpplus_datetime" redcap:FieldType="text" redcap:TextValidationType="datetime_seconds_ymd" redcap:FieldNote="The clock inside the device, which is what the result XML records. The module checks it against this computer before every measurement and sets it when it has drifted." redcap:SectionHeader="Provenance -- written by the device, not by the operator">
+		<Question><TranslatedText>Measurement time (device clock)</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_guid" Name="bpplus_guid" DataType="text" Length="999" redcap:Variable="bpplus_guid" redcap:FieldType="text" redcap:FieldNote="Filled by the BP+. Do not type over it.">
+		<Question><TranslatedText>Measurement GUID</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_device_id" Name="bpplus_device_id" DataType="text" Length="999" redcap:Variable="bpplus_device_id" redcap:FieldType="text" redcap:FieldNote="Which physical device took this reading. Worth keeping when a study runs more than one.">
+		<Question><TranslatedText>BP+ device ID</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_status" Name="bpplus_status" DataType="text" Length="999" redcap:Variable="bpplus_status" redcap:FieldType="text" redcap:FieldNote="Set to &quot;complete&quot; by the module once a reading has been stored. Useful in branching logic, and in a report of the records still to be measured.">
+		<Question><TranslatedText>Capture status</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_xml_text" Name="bpplus_xml_text" DataType="text" Length="999" redcap:Variable="bpplus_xml_text" redcap:FieldType="text" redcap:FieldNote="With file storage on this holds a marker -- the size and hash of the recording the server is holding, or the reason it could not be held. Never the XML itself. The recording is filed onto the record when this form is SAVED, not when the measurement finishes, so the project log is what records the filing. With file storage off this field holds the recording itself, reduced to fit: a text field takes 65,535 bytes and a full result is larger, so the choice is reduced or truncated, and a document cut off mid-element is worth nothing." redcap:SectionHeader="The result file from the device">
+		<Question><TranslatedText>Recording status, or the reduced recording</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_xml" Name="bpplus_xml" DataType="text" Length="999" redcap:Variable="bpplus_xml" redcap:FieldType="file" redcap:FieldNote="Written by the module when &quot;Store the raw measurement XML as a file&quot; is on. Around 80 kB, and more for a multi-reading protocol, which is why it is a file and not a text field. It holds everything above, and the cuff pressure recordings as well.">
+		<Question><TranslatedText>Raw measurement XML</TranslatedText></Question>
+	</ItemDef>
+	<ItemDef OID="bpplus_measurement_complete" Name="bpplus_measurement_complete" DataType="text" Length="1" redcap:Variable="bpplus_measurement_complete" redcap:FieldType="select" redcap:SectionHeader="Form Status">
+		<Question><TranslatedText>Complete?</TranslatedText></Question>
+		<CodeListRef CodeListOID="bpplus_measurement_complete.choices"/>
+	</ItemDef>
+	<CodeList OID="participant_complete.choices" Name="participant_complete" DataType="text" redcap:Variable="participant_complete">
+		<CodeListItem CodedValue="0"><Decode><TranslatedText>Incomplete</TranslatedText></Decode></CodeListItem>
+		<CodeListItem CodedValue="1"><Decode><TranslatedText>Unverified</TranslatedText></Decode></CodeListItem>
+		<CodeListItem CodedValue="2"><Decode><TranslatedText>Complete</TranslatedText></Decode></CodeListItem>
+	</CodeList>
+	<CodeList OID="bpplus_irregular.choices" Name="bpplus_irregular" DataType="text" redcap:Variable="bpplus_irregular">
+		<CodeListItem CodedValue="1"><Decode><TranslatedText>Yes</TranslatedText></Decode></CodeListItem>
+		<CodeListItem CodedValue="0"><Decode><TranslatedText>No</TranslatedText></Decode></CodeListItem>
+	</CodeList>
+	<CodeList OID="bpplus_measurement_complete.choices" Name="bpplus_measurement_complete" DataType="text" redcap:Variable="bpplus_measurement_complete">
+		<CodeListItem CodedValue="0"><Decode><TranslatedText>Incomplete</TranslatedText></Decode></CodeListItem>
+		<CodeListItem CodedValue="1"><Decode><TranslatedText>Unverified</TranslatedText></Decode></CodeListItem>
+		<CodeListItem CodedValue="2"><Decode><TranslatedText>Complete</TranslatedText></Decode></CodeListItem>
+	</CodeList>
+</MetaDataVersion>
+</Study>
+</ODM>

@@ -1,0 +1,104 @@
+# Build one module's installable ZIP and attach it to a GitHub release.
+#
+# Tags are per module, because module versions move independently -- the
+# data-capture module reaching 2.0.0 says nothing about the device-management
+# one, and a study pinned to one should not be prompted by a release of the
+# other:
+#
+#     bpplus_data_capture-v1.0.0
+#     bpplus_device_manager-v0.2.0
+#
+# The ZIP contains exactly one top-level folder, named <prefix>_v<version>, which
+# is what REDCap's "Upload module ZIP" expects and what the module directory must
+# be called when installed by hand. Nothing is rearranged on the way in: the
+# module folder in this repository is byte for byte what ships, which is also
+# what makes splitting a module into its own repository later a `git subtree
+# split` and nothing else.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - '*-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Read the module and version out of the tag
+        id: tag
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          module="${tag%-v*}"
+          version="${tag##*-v}"
+
+          test -d "modules/$module" || {
+            echo "Tag $tag names module '$module', which is not in modules/"
+            exit 1
+          }
+
+          # A ZIP whose contents disagree with its name is the one mistake that
+          # reaches a production REDCap and stays there: REDCap takes the version
+          # from the directory name, so an installation would report a version
+          # its own config.json contradicts.
+          declared=$(node -p "JSON.parse(require('fs').readFileSync('modules/$module/config.json','utf8')).version")
+          if [ "$declared" != "$version" ]; then
+            echo "Tag says $version; modules/$module/config.json says $declared."
+            echo "Update config.json and re-tag."
+            exit 1
+          fi
+
+          echo "module=$module" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "dir=${module}_v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Check the vendored SDK before shipping it
+        run: |
+          # An SDK edited in place is invisible until a measurement behaves
+          # differently on one site and not another, so the provenance file and
+          # the code beside it must agree before either leaves here.
+          npm install --no-save jsdom
+          node "modules/${{ steps.tag.outputs.module }}/test/smoke.mjs"
+
+      - name: Build the ZIP
+        run: |
+          module="${{ steps.tag.outputs.module }}"
+          dir="${{ steps.tag.outputs.dir }}"
+
+          mkdir -p dist/staging
+          cp -r "modules/$module" "dist/staging/$dir"
+
+          # Nothing here belongs on a REDCap server. The test harness stays: it
+          # is small, and an administrator who can open it has a way to tell a
+          # broken installation from a broken device without involving anyone.
+          rm -rf "dist/staging/$dir/node_modules"
+
+          (cd dist/staging && zip -qr "../$dir.zip" "$dir")
+          unzip -l "dist/$dir.zip" | head -20
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.tag.outputs.module }} ${{ steps.tag.outputs.version }}
+          files: dist/${{ steps.tag.outputs.dir }}.zip
+          body: |
+            Install `${{ steps.tag.outputs.dir }}.zip` through
+            **Control Center → External Modules → Upload module ZIP**, or unzip
+            it into REDCap's `modules/` directory.
+
+            The folder inside is named `${{ steps.tag.outputs.dir }}`. REDCap
+            takes the version from that name, so do not rename it.
+
+            See `modules/${{ steps.tag.outputs.module }}/CHANGELOG.md` for what
+            changed, and `docs/versioning.md` before moving a project that is
+            already collecting data.

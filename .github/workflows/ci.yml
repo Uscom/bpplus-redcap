@@ -1,0 +1,75 @@
+# Checks that run on every push and pull request.
+#
+# The point of each is that it catches something silent. A module whose config
+# does not parse, a data dictionary that no longer matches the module that fills
+# it, a vendored SDK edited in place -- none of these fail loudly in REDCap.
+# They fail on a participant.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  modules:
+    name: Modules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: The manifest says what REDCap needs, and the class matches it
+        # Not inline shell: the namespace separator is a backslash, and one
+        # surviving YAML, then a shell, then a node expression intact is not
+        # something to rely on.
+        run: node tools/check-modules.mjs
+
+      - name: PHP lints
+        run: find modules -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: JavaScript parses
+        run: find modules -name '*.js' -not -path '*/node_modules/*' -print0 | xargs -0 -n1 node --check
+
+      - name: Module tests
+        run: |
+          npm install --no-save jsdom
+          for test in modules/*/test/smoke.mjs; do
+            echo "== $test"
+            node "$test"
+          done
+
+  instruments:
+    name: Instruments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: The committed artefacts match the generator
+        run: |
+          # Both are committed so that nobody needs Node to download a data
+          # dictionary. That only holds if they are actually regenerated, so
+          # this fails when someone edits the CSV or the XML by hand.
+          node tools/build-instrument.mjs
+          git diff --exit-code -- instruments demo-project || {
+            echo
+            echo "The committed instrument artefacts are out of date."
+            echo "Run: node tools/build-instrument.mjs"
+            exit 1
+          }
+
+      - name: The project XML is well-formed
+        run: |
+          python3 -c "import xml.dom.minidom, sys; xml.dom.minidom.parse('demo-project/BPplusDemo.REDCap.xml')"

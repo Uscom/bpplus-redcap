@@ -1,0 +1,7 @@
+node_modules/
+package-lock.json
+
+# Built by .github/workflows/release.yml, never committed. A module ZIP in the
+# tree is a copy of a module that can drift from the module.
+dist/
+*_v*.zip

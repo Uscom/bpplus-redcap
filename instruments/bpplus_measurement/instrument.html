@@ -1,0 +1,45 @@
+<!--
+  The BP+ controls, as they appear on the instrument.
+
+  This is the readable copy of one cell: the Field Label of the descriptive
+  field `bpplus_intro`, which is where REDCap keeps page markup. Editing HTML
+  inside a spreadsheet cell is how element ids get lost, so the file is the
+  source and DataDictionary.csv is generated from it:
+
+      node tools/build-instrument-csv.mjs
+
+  What matters here is the ids. The module finds its controls by id and does
+  nothing at all when they are absent, so a renamed id is a survey page with
+  dead buttons and no error anywhere.
+
+      #bpplus-connect   #bpplus-measure   #bpplus-status      required
+      #bpplus-cancel    #bpplus-ping                          optional
+      #bpplus-alerts    #bpplus-results   #bpplus-device-info  optional
+
+  type="button" on every button is not decoration. A <button> inside a REDCap
+  form defaults to type="submit", so a button without it saves the record and
+  navigates away the first time an operator presses Connect.
+
+  The styling is inline because REDCap serves this markup from a database column
+  and there is no stylesheet to put it in. btn/btn-primaryrc are REDCap's own
+  classes, so the buttons match the rest of the page on any theme.
+-->
+
+<div id="bpplus-status" style="margin-bottom:12px;">Loading the BP+ module...</div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+  <button type="button" id="bpplus-connect" class="btn btn-primaryrc">Connect BP+</button>
+  <button type="button" id="bpplus-measure" class="btn btn-primaryrc" disabled>Measure</button>
+  <button type="button" id="bpplus-cancel" class="btn btn-defaultrc" disabled>Cancel</button>
+  <button type="button" id="bpplus-ping" class="btn btn-defaultrc" disabled>Check device</button>
+</div>
+
+<div id="bpplus-alerts" style="display:none;"></div>
+<div id="bpplus-results"></div>
+
+<!--
+  Versions and device mode. Present on this instrument because it is an example
+  and a reader who is setting one up wants them; a participant-facing instrument
+  should simply leave the element out, and the module will not render it.
+-->
+<div id="bpplus-device-info"></div>
