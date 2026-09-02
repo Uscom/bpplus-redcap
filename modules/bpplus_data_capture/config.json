@@ -2,7 +2,7 @@
   "name": "BP+ Data Capture",
   "namespace": "Uscom\\BpPlusDataCapture",
   "description": "Records a blood-pressure measurement from a Uscom BP+ device directly into a REDCap instrument, and keeps the device's own result XML as a file on the record. An example module, meant to be copied and edited.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "README.md",
   "authors": [
     {

@@ -274,12 +274,20 @@ There is **no global `ExternalModules.ajax()`**. A page that calls one throws
 On the server the file takes two calls, and both are required:
 
 ```php
-$docId  = REDCap::storeFile($tmpFile, $project_id, $filename);
-$linked = REDCap::addFileToField($docId, $project_id, $record, $field,
-                                 $event_id, $repeat_instance);
+$docId  = \REDCap::storeFile($tmpFile, $project_id, $filename);
+$linked = \REDCap::addFileToField($docId, $project_id, $record, $field,
+                                  $event_id, $repeat_instance);
 ```
 
 Both calls happen inside `redcap_save_record()`, not in the ajax handler.
+
+**Note the leading backslash.** `REDCap` is a global class and a module's class
+file is in a namespace, so an unqualified `REDCap::` names a class in *your*
+namespace, which does not exist. PHP raises an `Error` — not an `Exception`, so
+a `catch (Exception ...)` does not see it — the framework absorbs it, and the
+page finishes normally with the recording never filed. The same applies to
+`Throwable`, `DateTime` and anything else global: qualify it, or `use` it.
+`php -l` will not tell you; `node tools/check-modules.mjs` will.
 
 `storeFile()` copies the bytes into REDCap's edoc store and returns a doc id, or
 0. That gets the file onto the server and nowhere near the record — nothing yet

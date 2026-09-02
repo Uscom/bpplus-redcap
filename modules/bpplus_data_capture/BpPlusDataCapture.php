@@ -4,6 +4,7 @@ namespace Uscom\BpPlusDataCapture;
 
 use ExternalModules\AbstractExternalModule;
 use Exception;
+use Throwable;
 
 /**
  * BP+ Data Capture.
@@ -157,13 +158,15 @@ class BpPlusDataCapture extends AbstractExternalModule
 
         // A file cannot be attached to a record that does not exist. On a survey
         // the record is created when the first page is submitted, so a
-        // measurement taken before that has nowhere to go. Said plainly, because
-        // the page can offer to send it again once the record exists.
+        // measurement taken before that has nowhere to go. Said plainly, and
+        // recorded in <prefix>xml_text, because the measurement itself is good:
+        // the fields are already filled and will save normally.
         if ((string) $record === '') {
             return [
                 'status'  => 'error',
                 'message' => 'This page has no record yet, so the recording cannot be '
-                           . 'filed. Save the form, then press Resend recording.',
+                           . 'filed. The measurement is unaffected. Save the page, then '
+                           . 'take any further measurements from the saved record.',
             ];
         }
 
@@ -246,14 +249,21 @@ class BpPlusDataCapture extends AbstractExternalModule
             // not optional: an instrument that repeats will otherwise file every
             // measurement against instance 1.
             //
-            // Note the method names: storeFile() and addFileToField(). There is
-            // no REDCap::saveFile(), however plausible it reads.
-            $docId = REDCap::storeFile($stash, $project_id, $filename);
+            // Note the method names: storeFile() and addFileToField(). There
+            // is no REDCap::saveFile(), however plausible it reads.
+            //
+            // Note the leading backslash too. REDCap is a global class and this
+            // file is in a namespace, so an unqualified REDCap:: names a class
+            // in THIS namespace -- which does not exist. PHP raises an Error,
+            // not an Exception, so a catch block that names Exception does not
+            // see it, and the framework absorbs it: the survey finishes, the
+            // fields are saved, and the recording is never filed.
+            $docId = \REDCap::storeFile($stash, $project_id, $filename);
             if (!$docId) {
                 throw new Exception('REDCap::storeFile did not store the file.');
             }
 
-            $linked = REDCap::addFileToField(
+            $linked = \REDCap::addFileToField(
                 $docId, $project_id, $record, $field, $event_id, $repeat_instance
             );
             if (!$linked) {
@@ -271,7 +281,7 @@ class BpPlusDataCapture extends AbstractExternalModule
                 'doc_id'   => $docId,
                 'bytes'    => (string) filesize($stash),
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $this->log('BP+ recording failed', [
                 'record'   => $record,
                 'instance' => $repeat_instance,

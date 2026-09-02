@@ -125,17 +125,38 @@ kink** — that is the ordinary cause.
 
 ## The XML was not stored
 
-Console will say which of these it was:
+A recording is filed in two stages, and they fail in different places. The
+browser hands the XML to the server as soon as the measurement finishes; the
+**page save** turns it into a file on the record. `<prefix>xml_text` on the
+record says which stage it reached, so read that first.
+
+### `<prefix>xml_text` says `held …`
+
+The browser did its half. If `<prefix>xml` is still empty after the form has
+been saved, the filing failed — and that half is server-side, so **nothing
+about it appears in the browser console**. Look in **Control Center → External
+Modules → View module logs**, or on the project's **Logging** page, for
+`BP+ recording failed`. The message names the reason. The usual one is that
+`<prefix>xml` does not exist or is not a **File Upload** field.
+
+A failed attempt leaves the recording on the server exactly where it was, so
+**saving the form again files it**. Nothing is lost by the first attempt
+failing, and nothing needs re-measuring.
+
+### `<prefix>xml_text` says `not-held …`
+
+It never reached the server. The console has the reason:
 
 - **"Storing the XML as a file is not enabled for this project"** — tick the
   setting.
-- **"REDCap::saveFile did not store the file"** — the `<prefix>xml` field does
-  not exist, or is not a **File Upload** field.
+- **"This page has no record yet"** — a survey creates its record at the first
+  submit, so a measurement taken before that has nothing to attach to. Save the
+  page; measurements from then on file normally.
 - **"the External Modules AJAX helper is not on this page"** — the page is the
   harness, or something has replaced REDCap's own JavaScript.
 
-The measurement itself is unaffected either way: the fields are filled before
-the file is attempted.
+The measurement itself is unaffected in every one of these cases: the fields are
+filled before the file is attempted.
 
 ## The timestamp field is flagged invalid
 
