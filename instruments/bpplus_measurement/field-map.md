@@ -116,22 +116,24 @@ that produced it, and the raw cuff-pressure trace. It is the only artefact that
 can answer a question about a reading that nobody thought to ask at the time.
 
 `<p>xml_text` is **not a second copy of it**. With file storage on it holds a
-marker — `held bytes=79884 sha256=… field=…`, or `not-held … reason=…` when the
-server could not take it. That second case is the reason the field exists:
-without it, a record whose recording was lost reads exactly like one where none
-was ever taken, and the byte count and hash are what identify the file if it
-turns up elsewhere.
+marker — `saved bytes=79884 sha256=… field=… doc=11135 …`. The `doc=` is what
+ties the row to the document in an export, where the file itself is a separate
+download.
 
-It says **held**, not stored, because that is what is true when the page writes
-it. The recording is filed onto the record by `redcap_save_record()` when the
-form is **saved**, and no JavaScript is running by then — see the module README
-for why filing during the measurement destroys the file. The project log is what
-records the filing itself.
+The recording is filed the moment the device produces it, and the page then
+writes that document id into the form so the next submit cannot clear it — see
+the module README for why a submit would otherwise destroy the file it had just
+filed.
 
-With file storage **off** the field holds the recording itself, reduced by the
-SDK's `minimalXml()`. A text field takes 65,535 bytes and a result is larger, so
-the choice was never whole-or-reduced but reduced-or-truncated, and a document
-cut off mid-element is worth nothing. The reduction keeps the suprasystolic and
+With file storage **off**, or when filing failed, the field holds the recording
+itself, reduced by the SDK's `minimalXml()`. A value beginning with `<` is a
+recording; anything else is a marker. The failure case is why the field is worth
+having: there is no retry, so a misconfigured file field costs detail rather
+than the recording, and the module's own log holds the reason.
+
+A text field takes 65,535 bytes and a result is larger, so the choice was never
+whole-or-reduced but reduced-or-truncated, and a document cut off mid-element is
+worth nothing. The reduction keeps the suprasystolic and
 cuff recordings and every determination's readings, timestamp, alert and motion
 flag, and drops what recomputes from them.
 

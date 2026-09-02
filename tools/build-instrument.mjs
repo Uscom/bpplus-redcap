@@ -105,9 +105,11 @@ const FIELDS = [
 
   { name: 'xml_text', label: 'Recording status, or the reduced recording',
     section: 'The result file from the device',
-    note: 'With file storage on this holds a marker -- the size and hash of the recording the server is holding, or the reason it could not be held. Never the XML itself. The recording is filed onto the record when this form is SAVED, not when the measurement finishes, so the project log is what records the filing. With file storage off this field holds the recording itself, reduced to fit: a text field takes 65,535 bytes and a full result is larger, so the choice is reduced or truncated, and a document cut off mid-element is worth nothing.' },
+    annotation: '@HIDDEN-SURVEY',
+    note: 'With file storage on this holds a marker -- the size, hash and document id of the recording that was filed. With file storage off, or when filing failed, it holds the recording itself, reduced to fit: a text field takes 65,535 bytes and a full result is larger, so the choice is reduced or truncated, and a document cut off mid-element is worth nothing. A value beginning with "<" is a recording; anything else is a marker.' },
 
   { name: 'xml', type: 'file', label: 'Raw measurement XML',
+    annotation: '@HIDDEN-SURVEY',
     note: 'Written by the module when "Store the raw measurement XML as a file" is on. Around 80 kB, and more for a multi-reading protocol, which is why it is a file and not a text field. It holds everything above, and the cuff pressure recordings as well.' },
 ];
 
@@ -122,20 +124,49 @@ const field = f => ({
   validation: f.validation || '',
   min: f.min !== undefined ? String(f.min) : '',
   max: f.max !== undefined ? String(f.max) : '',
+  annotation: f.annotation || '',
+  identifier: f.identifier === true,
 });
 
 const INSTRUMENT = FIELDS.map(field);
 
-// The demo project needs a record ID, and REDCap requires it to be the first
-// field of the first instrument. It is not part of the instrument a researcher
-// appends to their own project, which already has one -- so it lives here and
-// not in FIELDS.
-const RECORD_ID = {
-  variable: 'record_id', form: 'participant', section: 'Participant',
-  type: 'text', label: 'Record ID', choices: '',
-  note: 'Sent to the BP+ as the patient ID, so the measurement identifies itself in its own XML.',
-  validation: '', min: '', max: '',
-};
+// -- The participant form -----------------------------------------------------
+//
+// Only the demo project has this. A researcher appending the instrument to an
+// existing project already has a record ID and whatever else they collect, so
+// none of it belongs in the data dictionary they import.
+//
+// It exists at all because REDCap makes the first field of the first instrument
+// the record ID, whatever it is, and forces it to a text field. Without a form
+// in front, that would be bpplus_intro -- the descriptive field carrying the
+// buttons -- turned into a text box with its markup gone.
+//
+// The two names are optional and are the obvious thing to delete or replace. A
+// study that identifies participants some other way should do exactly that.
+const PARTICIPANT = [
+  // No section header. REDCap drops one from the record ID field, so putting it
+  // here would make this file claim something the project will not have.
+  { variable: 'record_id', form: 'participant', section: '',
+    type: 'text', label: 'Record ID', choices: '',
+    note: 'Sent to the BP+ as the patient ID, so the measurement identifies itself in its own XML.',
+    validation: '', min: '', max: '', annotation: '' },
+
+  // Marked as identifiers, which is what they are. REDCap uses the flag to
+  // strip these fields from a de-identified export and to warn before an API
+  // token is given rights to them -- so it is not decoration, and a study
+  // adding its own name or date-of-birth fields should set it there too.
+  { variable: 'first_name', form: 'participant', section: '',
+    type: 'text', label: 'First name', choices: '',
+    note: 'Optional. Delete this field, or replace it with your own identifiers.',
+    validation: '', min: '', max: '', annotation: '', identifier: true },
+
+  { variable: 'last_name', form: 'participant', section: '',
+    type: 'text', label: 'Last name', choices: '',
+    note: 'Optional, like the one above.',
+    validation: '', min: '', max: '', annotation: '', identifier: true },
+];
+
+const RECORD_ID = PARTICIPANT[0];
 
 // -- Data dictionary CSV ------------------------------------------------------
 
@@ -172,6 +203,8 @@ function csvRow(f) {
   cells[7] = f.validation;
   cells[8] = f.min;
   cells[9] = f.max;
+  cells[10] = f.identifier ? 'y' : '';
+  cells[17] = f.annotation || '';
   return cells;
 }
 
@@ -254,16 +287,23 @@ const VALIDATION = {
  * than it looks: the field carrying a section header is alone in a group named
  * after that section, and the fields after it -- up to the next section header
  * -- form the next group, named after the form.
+ *
+ * A form with no section headers at all is therefore ONE group holding every
+ * field, not one group per field. Only a section header splits a group; being
+ * the first field merely starts the first one.
  */
 function itemGroups(form, fields) {
   const groups = [];
   for (const f of fields) {
-    const startsOne = f.section || groups.length === 0;
-    if (startsOne) {
+    if (f.section || groups.length === 0) {
       groups.push({ oid: `${form.name}.${f.variable}`, name: f.section || formLabel(form.name), fields: [f] });
-      // The section's own field stands alone; anything following it that has no
-      // section of its own begins a fresh group.
-      groups.push({ oid: null, name: formLabel(form.name), fields: [] });
+
+      // A section's own field stands alone, so anything following it begins a
+      // fresh group. Done only for a section, which is what makes a form
+      // without any of them a single group.
+      if (f.section) {
+        groups.push({ oid: null, name: formLabel(form.name), fields: [] });
+      }
     } else {
       groups[groups.length - 1].fields.push(f);
     }
@@ -302,7 +342,12 @@ function itemDef(f) {
     'redcap:FieldType': f.fieldType || f.type || 'text',
     'redcap:TextValidationType': v && v.redcap,
     'redcap:FieldNote': f.note,
+    'redcap:Identifier': f.identifier ? 'y' : '',
+    // SectionHeader before FieldAnnotation, which is the order REDCap writes
+    // them in. Attribute order means nothing to a parser; it means a great deal
+    // to a diff against a fresh export, which is how this file is checked.
     'redcap:SectionHeader': f.section,
+    'redcap:FieldAnnotation': f.annotation,
   });
 
   // A descriptive field keeps its markup in a REDCap-specific element, with the
@@ -351,6 +396,27 @@ function codeList(f) {
     OID: `${f.variable}.choices`, Name: f.variable, DataType: 'text',
     'redcap:Variable': f.variable,
   })}>\n${items}\n\t</CodeList>`;
+}
+
+/**
+ * One <redcap:Surveys> element for each instrument that is a survey.
+ *
+ * The attribute list is REDCap's own, taken from an export rather than chosen:
+ * 84 of them, nearly all empty or at their default, and REDCap writes every one
+ * whether or not it means anything. Which of them an import needs is not
+ * knowable from the outside, so the whole list is carried and only four values
+ * are ours -- the form, its title, and the two pieces of text a respondent
+ * reads.
+ *
+ * nextSurvey sets end_survey_redirect_next_survey, which sends a respondent
+ * straight on to the next survey in the queue. It is what makes the demo one
+ * flow: finish the participant form and the measurement page follows.
+ */
+function surveysGroup(forms) {
+  const surveys = forms.filter(form => form.survey).map(form =>
+    `\t\t<redcap:Surveys form_name="${xmlEscape(form.name)}" title="${xmlEscape(formLabel(form.name))}" instructions="${xmlEscape(form.instructions || "")}" offline_instructions="" acknowledgement="${xmlEscape(form.acknowledgement || "")}" stop_action_acknowledgement="" stop_action_delete_response="0" question_by_section="0" display_page_number="0" question_auto_numbering="0" survey_enabled="1" save_and_return="0" save_and_return_code_bypass="0" logo="" hide_title="0" view_results="0" min_responses_view_results="10" check_diversity_view_results="0" end_survey_redirect_url="" survey_expiration="" promis_skip_question="0" survey_auth_enabled_single="0" edit_completed_response="0" hide_back_button="0" show_required_field_text="1" confirmation_email_subject="" confirmation_email_content="" confirmation_email_from="" confirmation_email_from_display="" confirmation_email_attach_pdf="0" confirmation_email_attachment="" text_to_speech="0" text_to_speech_language="en" end_survey_redirect_next_survey="${form.nextSurvey ? "1" : "0"}" end_survey_redirect_next_survey_logic="" theme="" text_size="1" font_family="16" custom_css="" theme_text_buttons="" theme_bg_page="" theme_text_title="" theme_bg_title="" theme_text_sectionheader="" theme_bg_sectionheader="" theme_text_question="" theme_bg_question="" enhanced_choices="0" repeat_survey_enabled="0" repeat_survey_btn_text="" repeat_survey_btn_location="BEFORE_SUBMIT" response_limit="" response_limit_include_partials="1" response_limit_custom_text="&lt;p&gt;Thank you for your interest; however, the survey is closed because the maximum number of responses has been reached.&lt;/p&gt;" survey_time_limit_days="" survey_time_limit_hours="" survey_time_limit_minutes="" email_participant_field="" end_of_survey_pdf_download="0" pdf_save_to_field="" pdf_save_to_event_id="" pdf_save_translated="0" pdf_auto_archive="0" pdf_econsent_version="" pdf_econsent_type="" pdf_econsent_firstname_field="" pdf_econsent_firstname_event_id="" pdf_econsent_lastname_field="" pdf_econsent_lastname_event_id="" pdf_econsent_dob_field="" pdf_econsent_dob_event_id="" pdf_econsent_allow_edit="0" pdf_econsent_signature_field1="" pdf_econsent_signature_field2="" pdf_econsent_signature_field3="" pdf_econsent_signature_field4="" pdf_econsent_signature_field5="" survey_width_percent="" survey_show_font_resize="1" survey_btn_text_prev_page="" survey_btn_text_next_page="" survey_btn_text_submit="" survey_btn_hide_submit="0" survey_btn_hide_submit_logic=""/>`).join('\n');
+
+  return `\t<redcap:SurveysGroup>\n${surveys}\n\t</redcap:SurveysGroup>`;
 }
 
 function projectXml(forms) {
@@ -426,7 +492,7 @@ function projectXml(forms) {
 \t<redcap:CustomRecordLabel></redcap:CustomRecordLabel>
 \t<redcap:SecondaryUniqueField></redcap:SecondaryUniqueField>
 \t<redcap:SchedulingEnabled>0</redcap:SchedulingEnabled>
-\t<redcap:SurveysEnabled>0</redcap:SurveysEnabled>
+\t<redcap:SurveysEnabled>1</redcap:SurveysEnabled>
 \t<redcap:SurveyInvitationEmailField></redcap:SurveyInvitationEmailField>
 \t<redcap:Purpose>0</redcap:Purpose>
 \t<redcap:PurposeOther></redcap:PurposeOther>
@@ -437,6 +503,7 @@ function projectXml(forms) {
 ${repeating}
 \t\t</redcap:RepeatingInstruments>
 \t</redcap:RepeatingInstrumentsAndEvents>
+${surveysGroup(withComplete)}
 </GlobalVariables>
 <MetaDataVersion${attr({
     OID: 'Metadata.BPplusDataCaptureDemo',
@@ -481,8 +548,22 @@ const xml = projectXml([
   // FIRST instrument the record ID whatever it is -- importing the data
   // dictionary into a blank project turned bpplus_intro, the descriptive field
   // carrying the buttons, into a text record ID and destroyed the markup.
-  { name: 'participant', fields: [RECORD_ID] },
-  { name: FORM, fields: INSTRUMENT, repeating: true },
+  //
+  // Both forms are surveys, and the participant one leads to the other, so the
+  // demo can be walked through from a single link. Neither has to be used that
+  // way: a project that only ever enters data as staff simply never sends one.
+  {
+    name: 'participant', fields: PARTICIPANT, survey: true, nextSurvey: true,
+    instructions: '<p>Give your name if you would like it recorded with your ' +
+                  'measurements. Both fields are optional.</p>',
+    acknowledgement: '<p>Thank you.</p>',
+  },
+  {
+    name: FORM, fields: INSTRUMENT, repeating: true, survey: true,
+    instructions: '<p>Connect the BP+ and press Measure. The readings below are ' +
+                  'filled in by the device.</p>',
+    acknowledgement: '<p>Thank you.</p>',
+  },
 ]);
 requireAscii(xml, 'the project XML');
 
@@ -510,15 +591,15 @@ fs.writeFileSync(csvPath, BOM + csv, 'utf8');
 //   "The first field must be a 'text' field type. It will automatically be set
 //    as a 'text' field in the following cell: D2."
 //
-// This copy puts record_id in front, so the warning does not arise and the
-// buttons survive. The plain one stays as it is: appended to a project that
-// already has a record ID, a second one would be a duplicate.
-const newProjectCsv = toCsv([COLUMNS, csvRow(RECORD_ID), ...INSTRUMENT.map(csvRow)]);
+// This copy puts the participant form in front, so the warning does not arise
+// and the buttons survive. The plain one stays as it is: appended to a project
+// that already has a record ID, a second one would be a duplicate.
+const newProjectCsv = toCsv([COLUMNS, ...PARTICIPANT.map(csvRow), ...INSTRUMENT.map(csvRow)]);
 requireAscii(newProjectCsv, 'the new-project data dictionary');
 fs.writeFileSync(newProjectCsvPath, BOM + newProjectCsv, 'utf8');
 fs.writeFileSync(xmlPath, xml, 'utf8');
 
 const rel = p => path.relative(root, p).replace(/\\/g, '/');
 console.log(`wrote ${rel(csvPath)} -- ${INSTRUMENT.length} fields on form ${FORM}`);
-console.log(`wrote ${rel(newProjectCsvPath)} -- the same, with record_id in front`);
-console.log(`wrote ${rel(xmlPath)} -- 2 forms, ${INSTRUMENT.length + 1} fields`);
+console.log(`wrote ${rel(newProjectCsvPath)} -- the same, behind the participant form`);
+console.log(`wrote ${rel(xmlPath)} -- 2 forms, ${PARTICIPANT.length + INSTRUMENT.length} fields`);

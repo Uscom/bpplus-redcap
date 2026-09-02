@@ -225,46 +225,53 @@
             <tbody id="fields"></tbody>
           </table>
         </div>
-        <div class="note" id="xml-note">The raw XML field is written by the server, not the page.</div>
+        <div class="note" id="xml-note">The raw XML field holds a document id, not a
+          document: the server files the recording and the page writes the id here.</div>
       </div>
 
       <!--
         The REDCap server, stood in for.
 
-        The module holds a recording during the measurement and files it when
-        the form is SAVED, because filing it earlier loses a race with the
-        submit: the file input on the page is empty, so REDCap writes that
-        emptiness over the doc id, and clearing a file field is how REDCap
-        deletes an edoc.
+        The recording is filed the moment the device produces it, and the reply
+        carries the document id. That id matters: a REDCap form posts the value
+        its File Upload field was RENDERED with, so a page that rendered before
+        the file existed posts emptiness back over it -- and an emptied file
+        field is how REDCap deletes an edoc.
 
-        A harness that only answered the ajax call could not show that, so this
-        one has both halves, with a Save button for the step the browser
-        otherwise never sees.
+        The module answers that by writing the id into the form. The Submit
+        button below does what a real submit does, so both outcomes can be seen:
+        with the id written back the file survives, and without it the submit
+        destroys it.
       -->
       <div class="card card-standin">
         <h2>REDCap stand-in &mdash; where the recording goes</h2>
         <p class="note">
-          Nothing leaves the browser. Recordings are held in IndexedDB, so they
-          survive a reload the way the server's holding file survives a page
-          change.
+          Nothing leaves the browser. Recordings live in IndexedDB, so they
+          survive a reload the way an edoc survives a page change.
         </p>
 
         <div class="row" style="margin:12px 0 6px">
           <div style="flex:0 0 auto">
-            <button type="button" class="btn btn-primaryrc" id="em-save">Save the form</button>
+            <!--
+              Named the way REDCap names its save controls, so the module's own
+              locking of them during a measurement can be seen working here
+              rather than only in a project.
+            -->
+            <button type="button" class="btn btn-primaryrc" id="em-save"
+                    name="submit-btn-saverecord">Submit the form</button>
           </div>
           <div style="flex:1 1 auto;align-self:center">
-            <span class="note" id="em-save-hint">Files whatever is held, the way a submit does.</span>
+            <span class="note" id="em-save-hint">Posts back whatever the file field currently holds, the way a submit does.</span>
           </div>
         </div>
 
         <div class="row" style="margin-bottom:10px">
           <label style="flex:1 1 100%"><input type="checkbox" id="em-enabled" checked>
             Storing the XML as a file is enabled for this project</label>
-          <label style="flex:1 1 100%"><input type="checkbox" id="em-fail-hold">
-            Make the next <b>hold</b> fail &mdash; the measurement keeps its numbers, the recording is lost</label>
-          <label style="flex:1 1 100%"><input type="checkbox" id="em-fail-file">
-            Make the next <b>filing</b> fail &mdash; the held file stays, and the next save tries again</label>
+          <label style="flex:1 1 100%"><input type="checkbox" id="em-fail-save">
+            Make the next <b>filing</b> fail &mdash; the numbers are kept and the reduced recording goes into the text field</label>
+          <label style="flex:1 1 100%"><input type="checkbox" id="em-hide-docid">
+            Answer <b>without the document id</b> &mdash; the form is never told, and the next submit deletes the recording</label>
         </div>
 
         <div class="tablewrap">
@@ -275,7 +282,7 @@
             <tbody></tbody>
           </table>
         </div>
-        <p class="note" id="em-empty">Nothing held or filed yet.</p>
+        <p class="note" id="em-empty">Nothing filed yet.</p>
         <p class="note"><a href="#" id="em-clear">Forget everything</a></p>
       </div>
 
@@ -328,6 +335,13 @@ const settings = {
   scenario:  params.get('scenario')  || 'success',
   record:    params.get('record')    || 'DEMO-001',
   prefix:    params.get('prefix')    || 'bpplus_',
+
+  // ?readonly=1 renders the reading fields the way REDCap renders a survey
+  // response to somebody without "Edit survey responses": locked, with no save
+  // control anywhere on the page. The module has to notice and refuse, rather
+  // than offer to measure into fields whose values can never be stored -- and
+  // that is not a state anyone can produce here by clicking.
+  readonly:  params.get('readonly') === '1',
 };
 
 $('transport').value = settings.transport;
@@ -420,9 +434,10 @@ $('instrument').innerHTML = await loadInstrument();
 {
   const holder = document.createElement('div');
   holder.hidden = true;
+  const lock = settings.readonly ? ' readonly' : '';
   holder.innerHTML = FIELD_SUFFIXES
     .filter(s => s !== 'irregular')
-    .map(s => `<input type="hidden" name="${fieldName(s)}" value="">`)
+    .map(s => `<input type="hidden" name="${fieldName(s)}" value=""${lock}>`)
     .join('') +
     ['1', '0'].map(v =>
       `<label id="opt-${fieldName('irregular')}_${v}">
@@ -537,18 +552,18 @@ window.BPPLUS_TRANSPORT = function (api, options) {
  * initializeJavascriptModuleObject(). Nothing here does, so this catches the
  * call the module makes and answers in the same shape.
  *
- * The important part is that it does NOT file the recording when asked. It
- * holds it, exactly as BpPlusDataCapture.php does, and files it only when the
- * form is saved -- which here is a button, because a static page has no submit
- * to hook. Without that second half the harness could show a recording being
- * handed over and never show it arriving, which is the whole point of the
- * design: filing during the measurement loses a race with the submit, and the
- * edoc is deleted by the very save that was meant to keep it.
+ * It files the recording at once and replies with a document id, exactly as
+ * BpPlusDataCapture.php does. The Submit button is the other half, because a
+ * static page has no submit to hook: it posts back whatever the file field
+ * holds at that moment, and deletes the recording when that is nothing. That
+ * is REDCap's actual behaviour, and it is why the module writes the document
+ * id into the form the moment it has one.
  *
- * What this proves: that the module hands over the whole recording, under the
- * record, event and instance REDCap would file it against, and that a failed
- * filing does not throw it away. What it cannot prove is that
- * REDCap::storeFile() accepts it. That needs a real project.
+ * What this proves: that the module hands over the whole recording under the
+ * record, event and instance REDCap would file it against, that it tells the
+ * form which document to keep, and that a failure puts the reduced recording
+ * somewhere rather than losing it. What it cannot prove is that
+ * REDCap::storeFile() accepts the bytes. That needs a real project.
  */
 
 const EM_DB = 'bpplus-harness-recordings';
@@ -602,9 +617,10 @@ async function sha256Hex(text) {
 /**
  * The key the server holds a recording under.
  *
- * Mirrors stashPath() in the PHP: project, record, event, instance and field.
- * Two measurements on the same instance replace each other, which is what
- * repeating a measurement is meant to do; two instances do not.
+ * Project, record, event, instance and field -- the same five things REDCap
+ * files an edoc against. Two measurements on the same instance replace each
+ * other, which is what repeating a measurement is meant to do; two instances
+ * do not.
  */
 function emKey(cfg, field) {
   return [cfg.pid || '0', cfg.record, cfg.event_id || '1',
@@ -621,9 +637,9 @@ window.BPPLUS_MODULE = {
     }
 
     // BPPLUS_FAIL_SAVE is kept because the smoke checks and earlier notes use it.
-    if (window.BPPLUS_FAIL_SAVE || $('em-fail-hold').checked) {
-      $('em-fail-hold').checked = false;       // one failure, so a repeat can succeed
-      return { status: 'error', message: 'simulated: the server could not hold the recording' };
+    if (window.BPPLUS_FAIL_SAVE || $('em-fail-save').checked) {
+      $('em-fail-save').checked = false;       // one failure, so a repeat can succeed
+      return { status: 'error', message: 'simulated: the server could not file the recording' };
     }
 
     const xml = payload.xml || '';
@@ -634,15 +650,15 @@ window.BPPLUS_MODULE = {
     const field = fieldName('xml');
     const bytes = new TextEncoder().encode(xml).length;
     const sha256 = await sha256Hex(xml);
+    const docId = String(emNextDocId++);
 
     await emPut({
       id: emKey(cfg, field),
-      state: 'held',
+      state: 'filed',
       record: String(cfg.record),
       event_id: String(cfg.event_id || '1'),
       instance: String(cfg.repeat_instance || '1'),
-      field, bytes, sha256, xml,
-      docId: null,
+      field, bytes, sha256, xml, docId,
       at: new Date().toISOString(),
     });
 
@@ -650,49 +666,57 @@ window.BPPLUS_MODULE = {
     renderEm();
 
     return {
-      status: 'held', field, bytes, sha256,
+      // doc_id withheld on demand, so the deletion the write-back prevents can
+      // be watched happening. The file is filed either way; what changes is
+      // whether the form is ever told about it.
+      status: 'saved', field, bytes, sha256,
+      doc_id: $('em-hide-docid').checked ? undefined : docId,
       filename: cfg.record + '_i' + (cfg.repeat_instance || 1) + '_bpplus.xml',
     };
   },
 };
 
 /**
- * The submit, and redcap_save_record() after it.
+ * The submit.
  *
- * A failed filing leaves the held recording exactly where it is, so pressing
- * Save again retries. That is the module's real behaviour and it is invisible
- * without a way to fail on purpose.
+ * REDCap saves the value the file field holds at this moment, and an emptied
+ * file field is a deletion: it sets delete_date on the edoc's metadata. So a
+ * form that was never told the document id destroys the recording it just
+ * filed, and one that was told posts the same id back and changes nothing.
+ *
+ * That is the entire reason the module writes the id into the form, and it is
+ * invisible without a submit to press.
  */
-async function emSaveForm() {
-  const held = (await emAll()).filter(row => row.state === 'held');
+async function emSubmitForm() {
+  const rows = (await emAll()).filter(row => row.state === 'filed');
+  const posted = (document.querySelector(
+    `input[type="hidden"][name="${fieldName('xml')}"]`) || {}).value || '';
 
-  if (!held.length) {
+  if (!rows.length) {
     $('em-save-hint').innerHTML =
-      'Nothing was held, so the save filed nothing &mdash; which is what an ' +
-      'ordinary page save does.';
-    return;
-  }
-
-  if ($('em-fail-file').checked) {
-    $('em-fail-file').checked = false;
-    $('em-save-hint').innerHTML =
-      '<b>Filing failed.</b> The ' + held.length + ' held recording' +
-      (held.length === 1 ? '' : 's') + ' stayed put, so saving again retries. ' +
-      'Nothing was discarded &mdash; by this point the browser has nothing left to resend.';
+      'Nothing is filed, so the submit had no file field to change &mdash; ' +
+      'which is what an ordinary page save does.';
     renderEm();
     return;
   }
 
-  for (const row of held) {
-    row.state = 'filed';
-    row.docId = emNextDocId++;
-    row.filedAt = new Date().toISOString();
+  const doomed = rows.filter(row => row.docId !== posted);
+
+  for (const row of doomed) {
+    row.state = 'deleted';
+    row.deletedAt = new Date().toISOString();
     await emPut(row);
   }
 
-  $('em-save-hint').innerHTML =
-    'Filed ' + held.length + ' recording' + (held.length === 1 ? '' : 's') +
-    ' onto the record, after the save &mdash; which is the only order that survives.';
+  $('em-save-hint').innerHTML = doomed.length
+    ? '<b>The submit deleted ' + doomed.length + ' recording' +
+      (doomed.length === 1 ? '' : 's') + '.</b> The form posted ' +
+      (posted ? '<code>' + escapeHtml(posted) + '</code>' : 'an empty file field') +
+      ', which is not what is stored, and REDCap reads that as the file having ' +
+      'been removed.'
+    : 'The form posted <code>' + escapeHtml(posted) + '</code>, the document that ' +
+      'is already stored, so the submit changed nothing. That is the whole point ' +
+      'of writing the id back.';
   renderEm();
 }
 
@@ -705,8 +729,8 @@ async function renderEm() {
     const state = row.state === 'filed'
       ? '<span style="color:var(--ok);font-weight:600">filed</span> ' +
         '<span class="note">doc ' + row.docId + '</span>'
-      : '<span style="color:var(--warn);font-weight:600">held</span> ' +
-        '<span class="note">awaiting the save</span>';
+      : '<span style="color:var(--bad,#b71c1c);font-weight:600">deleted</span> ' +
+        '<span class="note">by the submit &mdash; doc ' + row.docId + '</span>';
 
     return '<tr>' +
       '<td>' + state + '</td>' +
@@ -723,11 +747,12 @@ async function renderEm() {
 
 let lastXml = '';
 
-$('em-save').addEventListener('click', emSaveForm);
+$('em-save').addEventListener('click', emSubmitForm);
 $('em-clear').addEventListener('click', async event => {
   event.preventDefault();
   await emClear();
-  $('em-save-hint').textContent = 'Files whatever is held, the way a submit does.';
+  $('em-save-hint').textContent =
+    'Posts back whatever the file field currently holds, the way a submit does.';
   renderEm();
 });
 renderEm();

@@ -28,7 +28,8 @@
  *   <p>irregular                      radio: irregular rhythm, 1/0
  *   <p>datetime <p>guid <p>device_id  provenance, from the device
  *   <p>status                         set to `complete` when a reading is stored
- *   <p>xml                            File Upload; written by the server
+ *   <p>xml                            File Upload; filed by the server, and its
+ *                                     document id written back into the form
  *   <p>xml_text                       optional; a marker, or the reduced XML
  *
  * Loaded as a classic script, because REDCap includes it with a plain
@@ -93,6 +94,7 @@
     var lastMeasurement = null;
     var lastClockSync = null;
     var busy = false;           // a measurement is on the arm right now
+    var filing = false;         // the recording is on its way to the server
     var stored = false;         // at least one reading has reached the record
 
     var fields = fieldNames(config().fieldPrefix || DEFAULT_PREFIX);
@@ -633,27 +635,41 @@
 
       // Best effort, and deliberately after the fields are filled: the
       // measurement is recorded whether or not the file is stored.
-      var saved = await saveXmlAsFile(measurement.xml);
+      //
+      // The save controls stay shut across this, and are not reopened until the
+      // page has been told the document id -- see setSubmitEnabled().
+      var saved;
+      filing = true;
+      updateButtons();
+      try {
+        saved = await saveXmlAsFile(measurement.xml);
+      } finally {
+        filing = false;
+        updateButtons();
+      }
 
       // Always, whichever way that went. A record that says nothing about a
       // recording it lost is worse than one that says it lost it.
       recordXmlText(measurement.xml, saved);
 
-      // "Save the form" is not politeness. The recording is on the server but
-      // not yet on the record, and it is redcap_save_record() -- which only runs
-      // on a submit -- that files it. Leaving the page without saving loses it.
-      var ok = saved && saved.status === 'held';
-      setStatus(ok || !config().saveXmlAsFile ? 'success' : 'error',
-        ok ? 'Measurement recorded. Save the form to file the recording.'
-           : (config().saveXmlAsFile
-               ? 'Measurement recorded, but the recording was NOT held. ' +
-                 ((saved && saved.message) || 'See the browser console.')
-               : 'Measurement recorded.'));
+      // The readings are in the fields but not yet in the database: only a
+      // submit puts them there. The recording is already on the record.
+      var keep = ' Save the form to keep the readings.';
+      var ok = saved && saved.status === 'saved';
+
+      if (!config().saveXmlAsFile) {
+        setStatus('success', 'Measurement recorded.' + keep);
+      } else if (ok) {
+        setStatus('success', 'Measurement recorded, and the recording saved.' + keep);
+      } else {
+        setStatus('error', 'Measurement recorded, but the recording was NOT saved. ' +
+          sentence((saved && saved.message) || 'See the browser console.') + keep);
+      }
       return true;
     }
 
     /**
-     * Ask the server to keep the raw XML as a file on the record.
+     * File the raw XML onto the record, now, and adopt the document id.
      *
      * A result runs to around 80 kB for a single measurement, and past 120 kB for
      * a three-determination AOBP one, because of the base64 pressure recordings --
@@ -662,7 +678,11 @@
      * a failure is reported and then let go rather than failing a measurement
      * that has already been taken.
      *
-     * @returns {Promise<string|null>} the stored filename, or null
+     * Filed at the moment the device produces it, rather than waiting for a
+     * submit: the participant is in the room now, and nothing that happens to
+     * the browser afterwards can take the recording away again.
+     *
+     * @returns {Promise<object|null>} the server's reply, or null
      */
     async function saveXmlAsFile(xml) {
       if (!config().saveXmlAsFile || !xml) return null;
@@ -684,42 +704,86 @@
 
       try {
         var reply = await em.ajax('save-xml', { xml: xml });
-        if (reply && reply.status === 'held') {
-          console.log('[BP+] recording held on the server (' + reply.bytes +
-                      ' bytes); it is filed into ' + reply.field +
-                      ' when this page is saved');
+        if (reply && reply.status === 'saved') {
+          console.log('[BP+] recording filed into ' + reply.field + ' as document ' +
+                      reply.doc_id + ' (' + reply.bytes + ' bytes)');
+          adoptDocId(reply.field, reply.doc_id);
           return reply;
         }
-        console.warn('[BP+] the recording was not held:', reply && reply.message);
+        console.warn('[BP+] the recording was not saved:', reply && reply.message);
         return { status: 'error', message: (reply && reply.message) || 'unknown' };
       } catch (error) {
-        console.warn('[BP+] the recording was not held:', error);
+        console.warn('[BP+] the recording was not saved:', error);
         return { status: 'error', message: String(error && error.message || error) };
       }
     }
 
     /**
+     * Tell this page's form which document the file field now holds.
+     *
+     * REDCap posts the value a File Upload field was rendered with. This page
+     * rendered before the recording existed, so the form still says that field
+     * is empty -- and submitting an empty file field is how REDCap deletes an
+     * edoc, by setting delete_date on its metadata. Writing the document id
+     * here makes the submit post back the value that is already stored, so it
+     * changes nothing.
+     *
+     * This is what REDCap's own upload dialog does with the id it gets, which
+     * is why uploading a file and then saving does not destroy it.
+     *
+     * Selected as an input, deliberately. The hidden input carries the field
+     * name and no id, and the download link beside it carries the same NAME --
+     * so document.getElementsByName() hands back the anchor as readily as the
+     * input, and getElementById() finds neither.
+     */
+    function adoptDocId(name, docId) {
+      if (!name) return;
+
+      // A reply that says the recording was filed but does not say which
+      // document it is leaves nothing to protect it with: the form still holds
+      // the value it was rendered with, and the next submit clears the field.
+      // Silence here would make that look like a page where nothing happened.
+      if (!docId) {
+        console.warn('[BP+] the server filed the recording but did not say which ' +
+                     'document it is, so the form cannot be told. Saving the form ' +
+                     'will detach it.');
+        return;
+      }
+
+      var input = document.querySelector('input[type="hidden"][name="' + name + '"]');
+      if (!input) {
+        console.warn('[BP+] no hidden input named "' + name + '" on this page, so the ' +
+                     'form still holds the value it was rendered with. Saving the form ' +
+                     'will detach the recording that was just filed.');
+        return;
+      }
+
+      input.value = String(docId);
+    }
+
+    /**
      * What goes in the text field, which is not the XML when there is a file.
      *
-     * Three cases, and the middle one is the reason this exists at all:
+     * Three cases, and the last one is the reason this exists at all:
      *
-     *   held             a marker naming the size and hash. It says "held", not
-     *                    "stored", because at this moment it is: the file is
-     *                    filed by redcap_save_record() once this page has been
-     *                    saved, and the browser is not running by then. The
-     *                    project log is what records the filing itself.
-     *
-     *   NOT held         a marker naming the size, hash and reason. Without it a
-     *                    record reads as a measurement that produced no
-     *                    recording, when in fact one was taken and lost -- and
-     *                    the hash is what identifies the file if it is recovered
-     *                    from elsewhere.
+     *   saved            a marker naming the size, hash and document id. The
+     *                    document id is what ties this row to the edoc, in an
+     *                    export where the file itself is a separate download.
      *
      *   no file storage  the reduced XML, because then the field is the only
      *                    place the recording can go. Reduced and not truncated:
      *                    a REDCap text field holds 65,535 bytes and a result is
      *                    larger, so the choice was never whole-or-reduced, and a
      *                    document cut off mid-element is worth nothing.
+     *
+     *   filing failed    the reduced XML again, when it fits. There is no second
+     *                    attempt -- the recording exists only in this browser and
+     *                    this is the last moment anything can be done with it --
+     *                    so a misconfigured file field costs detail rather than
+     *                    the recording. Why it failed is in the console and in
+     *                    the module's own log, which outlive the page.
+     *
+     * A value beginning with "<" is a recording; anything else is a marker.
      */
     function recordXmlText(xml, saved) {
       if (!xml) return;
@@ -747,16 +811,33 @@
         return;
       }
 
-      if (saved && saved.status === 'held') {
+      if (saved && saved.status === 'saved') {
+        // doc= is left out rather than written as "undefined" when the reply
+        // did not carry one. This value goes into a research record, and a
+        // field that names a document that does not exist is worse than one
+        // that stays quiet about it. adoptDocId() has already said so.
         setFieldValue(fields.xml_text,
-          'held bytes=' + saved.bytes +
+          'saved bytes=' + saved.bytes +
           ' sha256=' + String(saved.sha256 || '').slice(0, 16) +
-          ' field=' + saved.field + ' at=' + when);
+          ' field=' + saved.field +
+          (saved.doc_id ? ' doc=' + saved.doc_id : '') +
+          ' at=' + when);
         return;
       }
 
+      var fallback = sdk && sdk.minimalXml ? sdk.minimalXml(xml) : xml;
+      if (fallback.length <= 65535) {
+        console.warn('[BP+] the recording was not filed, so the reduced recording ' +
+                     'has been put in ' + fields.xml_text + ' instead. It is the only ' +
+                     'copy: save the form.');
+        setFieldValue(fields.xml_text, fallback);
+        return;
+      }
+
+      // Too large even reduced, which a multi-reading protocol can be. The
+      // hash is what identifies the recording if it turns up elsewhere.
       setFieldValue(fields.xml_text,
-        'not-held field=' + fields.xml + ' bytes=' + xml.length +
+        'not-saved field=' + fields.xml + ' bytes=' + xml.length +
         ' reason=' + String((saved && saved.message) || 'not attempted').slice(0, 120) +
         ' at=' + when);
     }
@@ -799,10 +880,63 @@
      * cuff slipped) has to be repeatable without reloading the page.
      */
     function updateButtons() {
-      var ready = !!device && !busy;
+      var ready = !!device && !busy && !filing;
       setEnabled(ui.measure, ready);
       setEnabled(ui.ping,    ready);
       setEnabled(ui.cancel,  !!device && busy);
+      setSubmitEnabled(!busy && !filing);
+    }
+
+    /**
+     * REDCap's own save controls, held shut while a measurement is in flight.
+     *
+     * Two reasons, and the second is the sharp one. A submit part-way through a
+     * measurement saves half a reading. And a submit in the moment between the
+     * server attaching the recording and this page being told its document id
+     * would post the empty value the page was rendered with -- which is how
+     * REDCap deletes an edoc.
+     *
+     * Matched on the name REDCap gives them rather than on any one id, because
+     * a data entry form has several save buttons and a survey has a single
+     * Submit. Matching nothing is not a fault: the test harness has no such
+     * control, and neither would a page whose markup has moved on.
+     */
+    function setSubmitEnabled(enabled) {
+      var controls = document.querySelectorAll('[name^="submit-btn"], [id^="submit-btn"]');
+      for (var i = 0; i < controls.length; i++) {
+        controls[i].disabled = !enabled;
+      }
+    }
+
+    /**
+     * Why this form cannot be written to, or null when it can.
+     *
+     * REDCap renders a survey response read-only to anyone without "Edit survey
+     * responses", and that page carries no save control at all. Offering Measure
+     * on it would fill fields whose values can never be stored, and file a
+     * recording against a record the operator has no way to submit.
+     *
+     * Judged on all the reading fields rather than one, so that a study marking
+     * a single device-written field @READONLY -- a reasonable thing to do -- is
+     * not mistaken for a locked form. When every one of them refuses to be
+     * written, the module cannot do its job whatever the reason.
+     */
+    function readOnlyReason() {
+      var names = ['sys', 'dia', 'map', 'hr', 'csys', 'cdia', 'ai', 'snr'];
+      var present = 0;
+      var locked = 0;
+
+      names.forEach(function (key) {
+        var input = document.querySelector('[name="' + fields[key] + '"]');
+        if (!input) return;
+        present++;
+        if (input.disabled || input.readOnly) locked++;
+      });
+
+      if (present === 0 || locked < present) return null;
+
+      return 'This form is read-only, so a measurement taken here could not be ' +
+             'saved. Open the record for editing first.';
     }
 
     if (ui.connect) {
@@ -886,7 +1020,16 @@
       });
     }
 
-    setStatus('ready', 'Connect the BP+ to begin.');
+    var locked = readOnlyReason();
+    if (locked) {
+      setStatus('error', locked);
+      setEnabled(ui.connect, false);
+      setEnabled(ui.measure, false);
+      setEnabled(ui.ping,    false);
+      setEnabled(ui.cancel,  false);
+    } else {
+      setStatus('ready', 'Connect the BP+ to begin.');
+    }
 
     /**
      * Pick a granted device back up, without asking.
@@ -915,7 +1058,7 @@
       }
     }
 
-    resumeConnection();
+    if (!locked) resumeConnection();
 
     // Exposed so the test harness can drive the same code REDCap runs. Nothing
     // in the module reads this back.
@@ -968,6 +1111,19 @@
 
   function setEnabled(button, enabled) {
     if (button) button.disabled = !enabled;
+  }
+
+  /**
+   * A server message, punctuated so the sentence after it reads as one.
+   *
+   * These arrive from PHP and from the framework, and neither reliably ends in
+   * a full stop -- so a status line that appends anything to one runs two
+   * sentences together.
+   */
+  function sentence(text) {
+    var trimmed = String(text == null ? '' : text).trim();
+    if (!trimmed) return '';
+    return /[.!?]$/.test(trimmed) ? trimmed : trimmed + '.';
   }
 
   function escapeHtml(value) {

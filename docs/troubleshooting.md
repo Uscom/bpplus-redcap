@@ -125,38 +125,60 @@ kink** — that is the ordinary cause.
 
 ## The XML was not stored
 
-A recording is filed in two stages, and they fail in different places. The
-browser hands the XML to the server as soon as the measurement finishes; the
-**page save** turns it into a file on the record. `<prefix>xml_text` on the
-record says which stage it reached, so read that first.
+`<prefix>xml_text` on the record says what happened, so read that first.
 
-### `<prefix>xml_text` says `held …`
+### It says `saved …`
 
-The browser did its half. If `<prefix>xml` is still empty after the form has
-been saved, the filing failed — and that half is server-side, so **nothing
-about it appears in the browser console**. Look in **Control Center → External
-Modules → View module logs**, or on the project's **Logging** page, for
-`BP+ recording failed`. The message names the reason. The usual one is that
-`<prefix>xml` does not exist or is not a **File Upload** field.
+The recording was filed, and `doc=` names the document. If `<prefix>xml` is
+nevertheless empty, the file was **deleted after being filed** — which happens
+when the form posts an empty file field over it. Check the console for:
 
-A failed attempt leaves the recording on the server exactly where it was, so
-**saving the form again files it**. Nothing is lost by the first attempt
-failing, and nothing needs re-measuring.
+> no hidden input named "bpplus_xml" on this page
 
-### `<prefix>xml_text` says `not-held …`
+That means the module could not tell the form which document to keep. The usual
+cause is a field prefix that does not match the instrument, so the module wrote
+to a field name that is not there.
 
-It never reached the server. The console has the reason:
+### It begins with `<`
+
+The value is the recording itself, reduced. Either file storage is off — in
+which case this is normal and the field is doing its job — or the filing failed
+and this is the fallback. The console says which, and so does the module's own
+log under **Control Center → External Modules → View module logs**, where
+`BP+ recording failed` carries the reason. The usual one is that `<prefix>xml`
+does not exist or is not a **File Upload** field.
+
+There is no retry: the recording exists only in the browser at that moment. What
+is in this field is the copy that survived, so **save the form**.
+
+### It says `not-saved …`
+
+Filing failed and the recording was too large to fall back into the field, which
+a multi-reading protocol can be. The reason is in the console and in the module
+log. The byte count and hash identify the recording if it turns up elsewhere.
+
+Reasons worth knowing:
 
 - **"Storing the XML as a file is not enabled for this project"** — tick the
   setting.
-- **"This page has no record yet"** — a survey creates its record at the first
-  submit, so a measurement taken before that has nothing to attach to. Save the
-  page; measurements from then on file normally.
+- **"This page has no record yet"** — the instrument is the first one of a
+  public survey, so REDCap has no record to attach a file to until that survey
+  is submitted. Put the instrument behind a participant form.
 - **"the External Modules AJAX helper is not on this page"** — the page is the
   harness, or something has replaced REDCap's own JavaScript.
 
 The measurement itself is unaffected in every one of these cases: the fields are
 filled before the file is attempted.
+
+## The Measure button is disabled and the status line says the form is read-only
+
+Every field the module writes is read-only on this page, so a measurement taken
+here could not be stored. The usual cause is a **survey response** being viewed
+by someone without **Edit survey responses** in their user rights — REDCap
+renders the whole form locked, with no save control at all.
+
+Either grant that right under **User Rights**, or open a new instance from the
+record rather than the survey response.
 
 ## The timestamp field is flagged invalid
 

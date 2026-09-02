@@ -336,38 +336,88 @@ console.log('\nthe harness can exercise the resume');
     /resumeConnection\(\)/.test(module) && /nothing to resume/.test(module));
 }
 
-// -- Does the harness still simulate BOTH halves of the save? -----------------
-// The module hands a recording over during the measurement and REDCap files it
-// on the form save, because filing earlier loses a race with the submit. A
-// stand-in that answered the ajax call with "filed" would show the recording
-// arriving at a moment it never actually arrives, and the one behaviour worth
-// demonstrating -- that a failed filing keeps the held bytes for the next save
-// -- would have nowhere to happen.
+// -- Does the harness still simulate the submit? -------------------------------
+// The recording is filed during the measurement, and the form is then told the
+// document id -- because a REDCap submit posts the value the file field was
+// RENDERED with, and an emptied file field is a deletion. A stand-in that only
+// answered the ajax call would show the file arriving and never show the thing
+// that can take it away again, which is the one behaviour worth demonstrating.
 
 console.log('\nthe harness simulates the whole journey');
 
 {
   const html = fs.readFileSync(new URL('../test/harness.html', import.meta.url), 'utf8');
 
-  check('the ajax stand-in answers "held", not "filed"',
-    /status:\s*'held'/.test(html) && !/status:\s*'filed'/.test(html));
+  check('the ajax stand-in files at once and answers "saved"',
+    /status:\s*'saved'/.test(html) && !/status:\s*'held'/.test(html));
 
-  check('there is a save step, separate from the measurement',
-    /emSaveForm/.test(html) && /id="em-save"/.test(html));
+  check('it returns a document id for the page to adopt',
+    /doc_id:/.test(html));
+
+  check('there is a submit step, separate from the measurement',
+    /emSubmitForm/.test(html) && /id="em-save"/.test(html));
+
+  // The whole point. Without a submit that can delete, the write-back looks
+  // like decoration rather than the thing standing between a recording and its
+  // deletion.
+  check('the submit deletes a recording the form was never told about',
+    /em-hide-docid/.test(html) && /state = 'deleted'/.test(html));
+
+  check('and leaves one the form posts back untouched',
+    /the submit changed nothing/.test(html));
 
   check('a filing can be made to fail on purpose',
-    /em-fail-file/.test(html));
+    /em-fail-save/.test(html));
 
-  check('and a held recording survives a failed filing',
-    /stayed put, so saving again retries/.test(html));
+  // Named the way REDCap names its save controls, so the module's locking of
+  // them during a measurement is exercised here and not only in a project.
+  check('the submit control is named the way the module looks for it',
+    /name="submit-btn/.test(html));
 
   // IndexedDB rather than a variable, so a reload does to the harness what a
-  // page change does to the server: the held recording is still there.
-  check('held recordings outlive a page load',
+  // page change does to the server: the filed recording is still there.
+  check('filed recordings outlive a page load',
     /indexedDB\.open/.test(html));
 
-  check('the hold is keyed the way the server keys it',
+  check('the recording is keyed the way the server keys it',
     /emKey/.test(html) && /repeat_instance/.test(html));
+
+  // A locked form is not a state anyone can reach here by clicking, and it is
+  // the one REDCap puts a survey response into for a user without "Edit survey
+  // responses".
+  check('a read-only form can be asked for on purpose',
+    /params\.get\('readonly'\)/.test(html) && /settings\.readonly \? ' readonly'/.test(html));
+}
+
+// -- Does the module still write the document id back? -------------------------
+// This is the whole of the file-storage design in one line of JavaScript. Lose
+// it and every recording is filed correctly and then deleted by the next
+// submit, with nothing anywhere saying so.
+
+console.log('\nthe form is told which document to keep');
+
+{
+  const module = fs.readFileSync(
+    new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+
+  check('the reply is adopted into the form', /adoptDocId\(/.test(module));
+
+  // As an input. The hidden input carries the field name and no id, and the
+  // download link beside it carries the same NAME -- so getElementsByName()
+  // returns the anchor as readily as the input.
+  check('and the hidden input is selected as an input, not by name alone',
+    /input\[type="hidden"\]\[name="/.test(module));
+
+  check('the save controls are shut while a measurement is in flight',
+    /setSubmitEnabled\(/.test(module) && /submit-btn/.test(module));
+
+  check('a read-only form is refused rather than measured on',
+    /readOnlyReason\(/.test(module));
+
+  // There is no second attempt any more, so a failure has to leave the
+  // recording somewhere rather than trusting a later save to retry.
+  check('a failed filing falls back to the reduced recording',
+    /minimalXml/.test(module) && /65535/.test(module));
 }
 
 // -- Is a result a reading? ---------------------------------------------------

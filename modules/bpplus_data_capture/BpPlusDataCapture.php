@@ -93,28 +93,20 @@ class BpPlusDataCapture extends AbstractExternalModule
     }
 
     /**
-     * Hold one measurement's raw XML until the page save is over.
+     * File one measurement's raw XML onto the record, and say which edoc it is.
      *
      * Reached from the page with BPPLUS_MODULE.ajax('save-xml', payload). The
      * framework authenticates the call and supplies $project_id, so unlike a
      * bare POST endpoint this cannot be aimed at another project.
      *
-     * It does NOT file the recording. Filing it here creates an edoc that the
-     * next page submit destroys:
-     *
-     *   The file field is on the instrument being filled in. A submit saves
-     *   every field on that page, and the file input is empty -- nobody chose a
-     *   file, this module attached one behind it -- so REDCap writes that
-     *   emptiness over the doc id. Clearing a file field is how REDCap deletes
-     *   an edoc: it sets delete_date on the metadata row.
-     *
-     * Re-attaching the doc id after the save is not a way round it: the link
-     * then points at a row REDCap considers deleted, and downloads as "Either
-     * this file does not exist OR you do not have permission to download it."
-     *
-     * So the bytes wait on disk and redcap_save_record() files them once the
-     * save is over. One edoc per recording, created after the only thing that
-     * would destroy it.
+     * The doc id in the reply is not decoration. A REDCap form posts the value
+     * its File Upload field held WHEN THE PAGE WAS RENDERED, so a page that
+     * rendered with an empty field posts that emptiness back over whatever has
+     * been attached since -- and clearing a file field is how REDCap deletes an
+     * edoc, by setting delete_date on the metadata row. The page therefore
+     * writes this doc id into the form's hidden input, and the submit posts the
+     * same value back and changes nothing. That is exactly what REDCap's own
+     * upload dialog does with the doc id it gets.
      *
      * Off unless the project turns it on. The measurement itself does not depend
      * on it: by the time this runs the fields are already filled, so a failure
@@ -156,90 +148,36 @@ class BpPlusDataCapture extends AbstractExternalModule
 
         $field = $this->fieldPrefix() . self::XML_FIELD_SUFFIX;
 
-        // A file cannot be attached to a record that does not exist. On a survey
-        // the record is created when the first page is submitted, so a
+        // A file cannot be attached to a record that does not exist. A survey
+        // reached from a public link has no record until its first submit, so a
         // measurement taken before that has nowhere to go. Said plainly, and
         // recorded in <prefix>xml_text, because the measurement itself is good:
         // the fields are already filled and will save normally.
+        //
+        // A capture instrument that is the FIRST instrument of a public survey
+        // is the only way to reach this. Put it second -- behind a participant
+        // form -- and the record always exists by the time anyone measures.
         if ((string) $record === '') {
             return [
                 'status'  => 'error',
                 'message' => 'This page has no record yet, so the recording cannot be '
-                           . 'filed. The measurement is unaffected. Save the page, then '
-                           . 'take any further measurements from the saved record.',
+                           . 'filed. The measurement itself is unaffected.',
             ];
         }
 
-        // Held, not filed. See the note above: filing now loses a race with the
-        // page submit, which clears the empty file input over the doc id and
-        // tombstones the edoc.
-        $stash = $this->stashPath($project_id, $record, $event_id, $repeat_instance, $field);
-
-        if (file_put_contents($stash, $xml) === false) {
-            $this->log('BP+ recording could not be held', [
-                'record' => $record, 'instance' => $repeat_instance, 'field' => $field,
-            ]);
-            return ['status' => 'error', 'message' => 'The server could not hold the recording.'];
-        }
-
-        $this->log('BP+ recording held for saving', [
-            'record'   => $record,
-            'instance' => $repeat_instance,
-            'field'    => $field,
-            'bytes'    => strlen($xml),
-        ]);
-
-        return [
-            'status'   => 'held',
-            'field'    => $field,
-            'filename' => $this->recordingFilename($record, $repeat_instance),
-            'bytes'    => strlen($xml),
-            'sha256'   => hash('sha256', $xml),
-        ];
-    }
-
-    /**
-     * File every recording held for this record and instance.
-     *
-     * Runs after the submit, which is the whole point: the save that would have
-     * destroyed the edoc has already happened, so the one created here survives
-     * it.
-     */
-    public function redcap_save_record(
-        $project_id,
-        $record,
-        $instrument,
-        $event_id,
-        $group_id,
-        $survey_hash,
-        $response_id,
-        $repeat_instance
-    ) {
-        if ($instrument !== $this->captureInstrument()) {
-            return;
-        }
-
-        $this->fileHeldRecording($project_id, $record, $event_id, $repeat_instance);
-    }
-
-    /**
-     * Turn a held recording into an edoc on the record, if one is waiting.
-     *
-     * A failed attempt leaves the held file exactly where it is, so the next
-     * save of this instance tries again. A recording is not thrown away because
-     * one attempt failed -- by this point there is nothing left in the browser
-     * to send again.
-     */
-    private function fileHeldRecording($project_id, $record, $event_id, $repeat_instance): void
-    {
-        $field = $this->fieldPrefix() . self::XML_FIELD_SUFFIX;
-        $stash = $this->stashPath($project_id, $record, $event_id, $repeat_instance, $field);
-
-        if (!is_file($stash)) {
-            return;                       // nothing waiting for this instance
-        }
-
         $filename = $this->recordingFilename($record, $repeat_instance);
+
+        // storeFile() takes a path, so the bytes have to be on disk for the
+        // length of these two calls. Written and removed inside this one
+        // request, unlike the edoc it becomes.
+        $tmp = tempnam($this->tempDir(), 'bpplus_');
+        if ($tmp === false || file_put_contents($tmp, $xml) === false) {
+            $this->log('BP+ recording failed', [
+                'record' => $record, 'instance' => $repeat_instance, 'field' => $field,
+                'message' => 'the server could not write a temporary file',
+            ]);
+            return ['status' => 'error', 'message' => 'The server could not write the recording.'];
+        }
 
         try {
             // Two calls, and both are required. storeFile() copies the bytes
@@ -256,9 +194,9 @@ class BpPlusDataCapture extends AbstractExternalModule
             // file is in a namespace, so an unqualified REDCap:: names a class
             // in THIS namespace -- which does not exist. PHP raises an Error,
             // not an Exception, so a catch block that names Exception does not
-            // see it, and the framework absorbs it: the survey finishes, the
-            // fields are saved, and the recording is never filed.
-            $docId = \REDCap::storeFile($stash, $project_id, $filename);
+            // see it, and the framework absorbs it: the page finishes normally
+            // with the fields saved and the recording never filed.
+            $docId = \REDCap::storeFile($tmp, $project_id, $filename);
             if (!$docId) {
                 throw new Exception('REDCap::storeFile did not store the file.');
             }
@@ -273,14 +211,6 @@ class BpPlusDataCapture extends AbstractExternalModule
                     . 'File Upload field.'
                 );
             }
-
-            $this->log('BP+ recording stored', [
-                'record'   => $record,
-                'instance' => $repeat_instance,
-                'field'    => $field,
-                'doc_id'   => $docId,
-                'bytes'    => (string) filesize($stash),
-            ]);
         } catch (Throwable $e) {
             $this->log('BP+ recording failed', [
                 'record'   => $record,
@@ -288,25 +218,35 @@ class BpPlusDataCapture extends AbstractExternalModule
                 'field'    => $field,
                 'message'  => $e->getMessage(),
             ]);
-            return;                       // left in place, so the next save retries
+            return ['status' => 'error', 'message' => $e->getMessage()];
+        } finally {
+            @unlink($tmp);
         }
 
-        unlink($stash);
+        $this->log('BP+ recording stored', [
+            'record'   => $record,
+            'instance' => $repeat_instance,
+            'field'    => $field,
+            'doc_id'   => $docId,
+            'bytes'    => strlen($xml),
+        ]);
+
+        return [
+            'status'   => 'saved',
+            'field'    => $field,
+            'doc_id'   => (string) $docId,
+            'filename' => $filename,
+            'bytes'    => strlen($xml),
+            'sha256'   => hash('sha256', $xml),
+        ];
     }
 
-    /** Where one recording waits between the measurement and the page save. */
-    private function stashPath($project_id, $record, $event_id, $repeat_instance, $field): string
+    /** Somewhere to put the bytes for the length of one request. */
+    private function tempDir(): string
     {
-        $dir = defined('APP_PATH_TEMP') && is_dir(APP_PATH_TEMP)
+        return defined('APP_PATH_TEMP') && is_dir(APP_PATH_TEMP)
             ? rtrim(APP_PATH_TEMP, '/' . DIRECTORY_SEPARATOR)
             : sys_get_temp_dir();
-
-        // Hashed, because a record id is whatever the project allows and this
-        // becomes a path. Deterministic, because the save has to find it again
-        // from a different request.
-        $key = md5(implode('|', [$project_id, $record, $event_id, $repeat_instance ?: 1, $field]));
-
-        return $dir . DIRECTORY_SEPARATOR . 'bpplus_pending_' . $key . '.xml';
     }
 
     /** Named so a directory of exported files still says which record and when. */

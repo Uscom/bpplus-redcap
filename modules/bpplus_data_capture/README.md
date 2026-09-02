@@ -228,36 +228,41 @@ own account of the measurement, the firmware that produced it, and the raw
 cuff-pressure trace — the only thing that can settle a question about a reading
 years afterwards.
 
-### When it is filed — after the save, never before
+### When it is filed — at once, and then the form is told
 
-**Nothing is filed during the measurement.** `save-xml` writes the XML to a
-holding file on the server; `redcap_save_record()` turns that into an edoc and
-attaches it once the form has been submitted.
+The recording is filed the moment the device produces it, before anyone presses
+anything. Nothing that happens to the browser afterwards can take it away.
 
-That ordering is not a preference. Filing during the measurement destroys the
-file:
+One thing makes that safe, and without it the recording is filed and then
+destroyed:
 
-The file field is on the instrument being filled in. A submit saves **every**
-field on that page, and the file input is empty — nobody chose a file, the module
-attached one behind it — so REDCap writes that emptiness over the doc id. And
-clearing a file field is how REDCap *deletes* an edoc: it sets `delete_date` on
-the metadata row.
+**A REDCap form posts the value its File Upload field was rendered with.** The
+page rendered before the recording existed, so the form still says that field is
+empty — and clearing a file field is how REDCap *deletes* an edoc, by setting
+`delete_date` on the metadata row. A submit would therefore undo the filing that
+had just succeeded.
 
-Re-attaching the doc id after the save is not a way round it: the link then
-points at a row REDCap considers deleted, and downloads as *"Either this file
-does not exist OR you do not have permission to download it."*
-
-So: one edoc per recording, created after the only thing that would destroy it.
+So the ajax reply carries the **document id**, and the page writes it into the
+form's hidden input for that field. The submit then posts back the value that is
+already stored and changes nothing. This is exactly what REDCap's own upload
+dialog does with the id it gets, which is why uploading a file by hand and then
+saving does not destroy it.
 
 Two consequences worth knowing:
 
-- **The operator must save the form.** The status line says so — *"Measurement
-  recorded. Save the form to file the recording."* Leaving the page without
-  saving loses the recording, and the module cannot help that; the server is
-  holding bytes that nothing has asked it to file.
-- **A failed filing leaves the held file in place**, so the next save of that
-  instance tries again. A recording is not thrown away because one attempt
-  failed — by then there is nothing left in the browser to send again.
+- **The save controls are disabled while a measurement is in flight**, and stay
+  disabled until the page has been told the document id. A submit in that gap
+  would post the empty value the page was rendered with.
+- **There is no second attempt.** A failed filing puts the *reduced* recording
+  into `<prefix>xml_text` instead, because the browser is the only place it
+  still exists and this is the last moment anything can be done with it. Why it
+  failed is in the console and in the module's own log.
+
+A capture instrument reached from a **public survey link as the first
+instrument** is the one case that cannot work: REDCap has no record until that
+survey's first submit, and a file cannot be attached to a record that does not
+exist. Put the instrument behind a participant form — as the demo project does —
+and the record always exists by the time anyone measures.
 
 ### How it is filed
 
@@ -279,7 +284,8 @@ $linked = \REDCap::addFileToField($docId, $project_id, $record, $field,
                                   $event_id, $repeat_instance);
 ```
 
-Both calls happen inside `redcap_save_record()`, not in the ajax handler.
+Both happen in the ajax handler, and the doc id goes back to the page in the
+reply.
 
 **Note the leading backslash.** `REDCap` is a global class and a module's class
 file is in a namespace, so an unqualified `REDCap::` names a class in *your*
@@ -308,18 +314,18 @@ cases:
 
 | | `<prefix>xml_text` gets |
 |---|---|
-| The server is holding it | `held bytes=79884 sha256=… field=… at=…` |
-| It could not be held | `not-held field=… bytes=… reason=… at=…` |
+| It was filed | `saved bytes=79884 sha256=… field=… doc=11135 at=…` |
 | File storage is off | the recording itself, **reduced** |
+| Filing failed | the recording itself, **reduced** — or `not-saved …` when even that is too large |
 
-It says **held**, not stored, because that is what is true at the moment the page
-writes it — the filing happens later, on the save, with no JavaScript running.
-**The project log is the authoritative record of the filing**, and carries the
-doc id or the failure.
+A value beginning with `<` is a recording; anything else is a marker. The `doc=`
+is what ties the row to the edoc in an export, where the file itself is a
+separate download.
 
-The middle row is why the field exists. Without it, a record whose recording was
-lost reads exactly like one where none was ever taken — and the byte count and
-hash are what identify the file if it is recovered from somewhere else.
+The last row is why the field is worth having. There is no retry — the recording
+exists only in the browser at that moment — so a misconfigured file field costs
+detail rather than the recording itself. **The module's own log holds the
+reason**, and outlives the page.
 
 The last row uses the SDK's `minimalXml()`. A REDCap text field holds 65,535
 bytes and a result is larger, so the choice was never whole-or-reduced but
@@ -422,27 +428,35 @@ copy and says so in a banner.
 
 ### Seeing where the recording goes
 
-The harness stands in for the REDCap server, and for **both halves** of the
-save — because the module hands a recording over during the measurement and
-REDCap files it when the form is saved, and a stand-in with only the first half
-would show the recording arriving at a moment it never actually arrives.
+The harness stands in for the REDCap server, and for the **submit** as well —
+because the submit is the thing that can destroy a recording, and a stand-in
+that only answered the ajax call would show the file arriving and never show
+what takes it away.
 
-So there is a **Save the form** button. Take a measurement and the recording
-appears as *held, awaiting the save*, under the record, event and instance
-REDCap would file it against, with its size and SHA-256. Press Save and it
-becomes *filed*, with a doc id.
+Take a measurement and the recording appears as *filed*, with a doc id, under
+the record, event and instance REDCap would file it against, with its size and
+SHA-256. Then press **Submit the form**: it posts back whatever the file field
+holds at that moment, exactly as REDCap does.
 
-Two switches make the failures reachable:
+Three switches make the interesting paths reachable:
 
 | | |
 |---|---|
-| Make the next **hold** fail | The measurement keeps its numbers; the recording is lost and `<prefix>xml_text` records that it was |
-| Make the next **filing** fail | The held recording **stays put**, so saving again retries — the behaviour that is otherwise invisible |
+| Make the next **filing** fail | The measurement keeps its numbers, and the reduced recording goes into `<prefix>xml_text` rather than being lost |
+| Answer **without the document id** | The form is never told, so the next submit **deletes** the recording — the failure the write-back exists to prevent, watched happening |
+| File storage **off** | `<prefix>xml_text` holds the reduced recording instead |
 
-Held recordings live in IndexedDB, so they survive a reload the way the server's
-holding file survives a page change. Every recording can be opened or saved from
-the table, which is how to check that what the module handed over is the whole
-document and not a fragment.
+Recordings live in IndexedDB, so they survive a reload the way an edoc survives
+a page change. Every one can be opened or saved from the table, which is how to
+check that what the module handed over is the whole document and not a fragment.
+
+The Submit button is named the way REDCap names its save controls, so the
+module's own locking of them during a measurement can be watched here too.
+
+Add **`?readonly=1`** to the URL to render the fields locked, the way REDCap
+renders a survey response to somebody without *Edit survey responses*. The
+module should refuse to connect and say why, rather than offer to measure into
+fields whose values could never be stored.
 
 What it cannot prove is that `REDCap::storeFile()` accepts it. That needs a real
 project.
