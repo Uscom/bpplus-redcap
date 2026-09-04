@@ -59,7 +59,7 @@ which of these an administrator has to do and which a project owner can.
 | What to send the device as the patient ID | `REDCAP-[record]-[instance]` | See **Patient ID** |
 | Patient ID template | blank | Used when the setting above says so |
 | Store the raw measurement XML as a file | off | Needs a File Upload field. See below |
-| Largest recording this project will accept | 1 MB | May be lowered to 0.2, not raised |
+| Largest recording this project will accept | 1 MB | May be lowered to 0.6, not raised |
 | Set the device clock when it is out by more than *n* minutes | 5 | See **The device clock** |
 | Require the device to be in a particular measurement mode | any | Refuses to measure otherwise |
 | Refuse a measurement started on the device itself | off | See below |

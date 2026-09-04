@@ -11,7 +11,7 @@ module version alone does not identify the code that talked to the device.
 
 | Module | Version | SDK | Terminal API | BP+ software | REDCap framework |
 |---|---|---|---|---|---|
-| `bpplus_data_capture` | 1.3.1 | 1.3.0 (`v1.3.0`) | 2.4 | 5.3.0.0 series | 15 |
+| `bpplus_data_capture` | 1.3.2 | 1.3.0 (`v1.3.0`) | 2.4 | 5.3.0.0 series | 15 |
 
 The SDK column names the tag a copy is pinned to. The authoritative statement for
 an installed copy is its own `sdk/SDK-VERSION.json`, which records the tag, the

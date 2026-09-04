@@ -31,18 +31,27 @@ class BpPlusDataCapture extends AbstractExternalModule
     /**
      * The size limit on one recording, in megabytes.
      *
-     * A single suprasystolic result is about 0.08 MB. The default leaves room
-     * for a multi-reading AOBP result several times over, deliberately: the
-     * limit exists to stop the endpoint being used as file storage, and an
-     * abuser is no more deterred by a tight fit than by a generous one, while
-     * a tight fit can reject a real measurement.
+     * Measured, not guessed. A pressure wave is base64 of 16-bit samples at
+     * 200 Hz, so 8/3 of a byte per sample, and that is what sets the size:
+     *
+     *   single suprasystolic result                          0.08 MB
+     *   5-determination AOBP, as recorded                    0.13 MB
+     *   5 x 75 s, the longest the device records today       0.25 MB
+     *   5 x 180 s with a 30 s suprasystolic, the most the
+     *     hardware could ever produce                        0.53 MB
+     *
+     * So the floor is 0.6 and not lower. A project setting 0.2 would reject a
+     * real 5-determination AOBP -- and rejecting a measurement already taken on
+     * a participant is far worse than accepting a file that is too big. The
+     * floor has to sit above the largest thing a device can produce, not below
+     * the smallest.
+     *
+     * The ceiling is the default: a project may lower the limit a little and
+     * never raise it. Nothing a device produces comes near 1 MB, so a project
+     * asking for more is not describing a measurement.
      */
     private const DEFAULT_MAX_MB = 1.0;
-    private const MIN_MAX_MB     = 0.2;
-
-    // The ceiling is the default: a project may lower this limit and never
-    // raise it. Nothing a device produces comes near 1 MB, so a project asking
-    // for more is not describing a measurement.
+    private const MIN_MAX_MB     = 0.6;
     private const LIMIT_MAX_MB   = 1.0;
 
     /**

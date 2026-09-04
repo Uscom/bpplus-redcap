@@ -206,15 +206,24 @@ $out = call(result(900 * 1024));
 check('a large but plausible AOBP result is accepted',
     ($out['reply']['status'] ?? '') === 'saved', json_encode($out['reply']['message'] ?? ''));
 
-$out = call(result(300 * 1024), ['max-recording-mb' => '0.2']);
+$out = call(result(900 * 1024), ['max-recording-mb' => '0.7']);
 check('a project can lower the limit', ($out['reply']['status'] ?? '') === 'error');
 
-$out = call(result(300 * 1024), ['max-recording-mb' => '4']);
-check('and raise it', ($out['reply']['status'] ?? '') === 'saved');
+// The floor has to sit ABOVE the largest thing the hardware can produce, or a
+// project lowering the limit rejects a measurement already taken. A pressure
+// wave is base64 of 16-bit samples at 200 Hz, so five 180-second
+// determinations with a 30-second suprasystolic come to about 0.53 MB -- the
+// most the device could ever record.
+$WORST_REAL_RECORDING = (int) (0.53 * 1024 * 1024);
+
+$out = call(result($WORST_REAL_RECORDING), ['max-recording-mb' => '0.1']);
+check('but never below the largest recording a device can produce',
+    ($out['reply']['status'] ?? '') === 'saved',
+    'the lowest setting a project can choose rejected a real 5-determination AOBP');
 
 // Clamped, not merely defaulted: 1000 where 10 was meant must not turn this
 // into an endpoint with no bound at all.
-$out = call(result(17 * 1024 * 1024), ['max-recording-mb' => '1000']);
+$out = call(result(2 * 1024 * 1024), ['max-recording-mb' => '1000']);
 check('an absurd setting is clamped rather than obeyed',
     ($out['reply']['status'] ?? '') === 'error');
 
