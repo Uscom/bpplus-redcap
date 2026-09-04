@@ -336,11 +336,15 @@ const settings = {
   record:    params.get('record')    || 'DEMO-001',
   prefix:    params.get('prefix')    || 'bpplus_',
 
-  // ?readonly=1 renders the reading fields the way REDCap renders a survey
-  // response to somebody without "Edit survey responses": locked, with no save
-  // control anywhere on the page. The module has to notice and refuse, rather
-  // than offer to measure into fields whose values can never be stored -- and
-  // that is not a state anyone can produce here by clicking.
+  // ?readonly=1 renders the page the way REDCap renders a survey response to
+  // somebody without "Edit survey responses": no save control anywhere on it.
+  // The module has to notice and refuse, rather than offer to measure into a
+  // form whose values can never be stored -- and that is not a state anyone
+  // can produce here by clicking.
+  //
+  // The absence of a save control is the signal, not read-only fields: a study
+  // may reasonably mark every device-written field @READONLY, and the UTas AOBP
+  // instrument does.
   readonly:  params.get('readonly') === '1',
 
   // What the module sends the device as a patient ID. Worth being able to drive
@@ -448,10 +452,9 @@ $('instrument').innerHTML = await loadInstrument();
 {
   const holder = document.createElement('div');
   holder.hidden = true;
-  const lock = settings.readonly ? ' readonly' : '';
   holder.innerHTML = FIELD_SUFFIXES
     .filter(s => s !== 'irregular')
-    .map(s => `<input type="hidden" name="${fieldName(s)}" value=""${lock}>`)
+    .map(s => `<input type="hidden" name="${fieldName(s)}" value="">`)
     .join('') +
     ['1', '0'].map(v =>
       `<label id="opt-${fieldName('irregular')}_${v}">
@@ -774,6 +777,17 @@ async function renderEm() {
 }
 
 let lastXml = '';
+
+if (settings.readonly) {
+  // REDCap renders a locked form with no save control at all. Removing the
+  // name is what the module looks for, and leaves the button visibly present
+  // so the page still reads as a page.
+  $('em-save').removeAttribute('name');
+  $('em-save').disabled = true;
+  $('em-save-hint').textContent =
+    'Read-only: this form has no save control, the way REDCap renders a survey ' +
+    'response to somebody without "Edit survey responses".';
+}
 
 $('em-save').addEventListener('click', emSubmitForm);
 $('em-clear').addEventListener('click', async event => {

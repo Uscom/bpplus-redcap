@@ -1097,24 +1097,25 @@
      * on it would fill fields whose values can never be stored, and file a
      * recording against a record the operator has no way to submit.
      *
-     * Judged on all the reading fields rather than one, so that a study marking
-     * a single device-written field @READONLY -- a reasonable thing to do -- is
-     * not mistaken for a locked form. When every one of them refuses to be
-     * written, the module cannot do its job whatever the reason.
+     * Judged on whether the page has any save control, NOT on whether the
+     * fields are read-only. Marking every device-written field @READONLY is a
+     * reasonable thing for a study to do -- it stops an operator typing over a
+     * reading, and the module writes them with JavaScript regardless. The UTas
+     * AOBP instrument does exactly that on all of them, so a test that looked
+     * at the fields would refuse to measure on every page of it.
+     *
+     * A form REDCap has locked carries no save or submit button at all, which
+     * is the thing that actually decides whether a measurement can be kept.
+     *
+     * Only asked on a real REDCap page: the test harness has its own controls,
+     * and a page without the module object is not one this can reason about.
      */
     function readOnlyReason() {
-      var names = ['sys', 'dia', 'map', 'hr', 'csys', 'cdia', 'ai', 'snr'];
-      var present = 0;
-      var locked = 0;
+      if (!window.BPPLUS_MODULE) return null;
 
-      names.forEach(function (key) {
-        var input = document.querySelector('[name="' + fields[key] + '"]');
-        if (!input) return;
-        present++;
-        if (input.disabled || input.readOnly) locked++;
-      });
-
-      if (present === 0 || locked < present) return null;
+      if (document.querySelector('[name^="submit-btn"], [id^="submit-btn"]')) {
+        return null;
+      }
 
       return 'This form is read-only, so a measurement taken here could not be ' +
              'saved. Open the record for editing first.';

@@ -386,7 +386,7 @@ console.log('\nthe harness simulates the whole journey');
   // the one REDCap puts a survey response into for a user without "Edit survey
   // responses".
   check('a read-only form can be asked for on purpose',
-    /params\.get\('readonly'\)/.test(html) && /settings\.readonly \? ' readonly'/.test(html));
+    /params\.get\('readonly'\)/.test(html) && /removeAttribute\('name'\)/.test(html));
 }
 
 // -- Does the module still write the document id back? -------------------------
