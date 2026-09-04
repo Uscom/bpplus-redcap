@@ -60,6 +60,7 @@ npm install --no-save jsdom
 node modules/bpplus_data_capture/test/smoke.mjs   # module starts; instrument matches; SDK unedited
 node tools/build-instrument.mjs                   # then git diff must be empty
 php -l modules/bpplus_data_capture/*.php
+php modules/bpplus_data_capture/test/guards.php   # what save-xml refuses
 ```
 
 For anything touching the page controller, run the harness rather than reasoning

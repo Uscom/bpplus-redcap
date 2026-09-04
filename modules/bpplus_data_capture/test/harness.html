@@ -342,6 +342,13 @@ const settings = {
   // than offer to measure into fields whose values can never be stored -- and
   // that is not a state anyone can produce here by clicking.
   readonly:  params.get('readonly') === '1',
+
+  // What the module sends the device as a patient ID. Worth being able to drive
+  // from here: it ends up in the device's own result file and on its SD card,
+  // and a template that composes to something the device refuses is a
+  // configuration mistake nobody sees until a measurement is taken.
+  patientIdMode:     params.get('patientidmode') || 'default',
+  patientIdTemplate: params.get('patientid') || '',
 };
 
 $('transport').value = settings.transport;
@@ -505,6 +512,13 @@ renderFields();
 window.BPPLUS_CONFIG = {
   record: settings.record,
   fieldPrefix: settings.prefix,
+
+  // ?patientid= sets the template, ?patientidmode= which of the four modes.
+  // The simulator stores whatever the `s` command carried and writes it back
+  // into <PatientID>, so the round trip is real: what the module composed is
+  // what comes out of the result document.
+  patientIdMode: settings.patientIdMode,
+  patientIdTemplate: settings.patientIdTemplate,
   // Passed explicitly for the same reason the server passes it: this page is not
   // in the same folder as the module's script, so a relative import would
   // resolve against the wrong directory.
@@ -800,6 +814,24 @@ function runChecks(m) {
     out.push({ ok, name, detail });
 
   check(m.crcOk !== false, 'the result passed its checksum');
+
+  // The whole point of the patient ID: what the module composed has to come
+  // back out of the device's own result document, because that document is what
+  // is on the SD card when REDCap has no copy of the reading.
+  {
+    const mode = window.BPPLUS_CONFIG.patientIdMode;
+    const expected = mode === 'off' ? ''
+      : mode === 'record' ? String(window.BPPLUS_CONFIG.record)
+      : mode === 'template' ? null            // whatever the template composed
+      : 'REDCAP-' + window.BPPLUS_CONFIG.record + '-' +
+        (window.BPPLUS_CONFIG.repeat_instance || 1);
+
+    check(expected === null ? m.patientId !== undefined : m.patientId === expected,
+      mode === 'off'
+        ? 'no patient ID was sent, as configured'
+        : 'the patient ID came back out of the result document',
+      `sent mode "${mode}", result says "${m.patientId}"`);
+  }
 
   check(String(m.brachial.sys) === values[fieldName('sys')],
     'systolic reached the field intact',

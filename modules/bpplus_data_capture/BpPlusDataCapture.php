@@ -29,6 +29,19 @@ class BpPlusDataCapture extends AbstractExternalModule
     private const DEFAULT_CLOCK_MINS = 5.0;
 
     /**
+     * The size limit on one recording, in megabytes.
+     *
+     * A single suprasystolic result is about 0.08 MB. The default leaves room
+     * for a multi-reading AOBP result several times over, deliberately: the
+     * limit exists to stop the endpoint being used as file storage, and an
+     * abuser is no more deterred by a tight fit than by a generous one, while
+     * a tight fit can reject a real measurement.
+     */
+    private const DEFAULT_MAX_MB = 1.0;
+    private const MIN_MAX_MB     = 0.1;
+    private const LIMIT_MAX_MB   = 16.0;
+
+    /**
      * The suffix of the File Upload field the raw XML is stored in.
      *
      * Combined with the project's field prefix, so a project that renamed its
@@ -137,13 +150,59 @@ class BpPlusDataCapture extends AbstractExternalModule
             return ['status' => 'error', 'message' => 'Storing the XML as a file is not enabled for this project.'];
         }
 
+        // This action is declared in no-auth-ajax-actions, because a survey
+        // respondent is not logged in. So everything below assumes the caller
+        // is unauthenticated and possibly not the module's own page: the checks
+        // are what stands between a survey and an endpoint that writes files.
+        //
+        // The instrument first. The module only puts its JavaScript on the
+        // capture instrument, so a call naming anything else did not come from
+        // a page this module wrote. Logged with the value received, because if
+        // the framework ever supplies this differently the symptom is that
+        // filing stops entirely, and the log is what says why in one look.
+        if ($instrument !== $this->captureInstrument()) {
+            $this->log('BP+ recording refused', [
+                'reason'     => 'not the capture instrument',
+                'instrument' => (string) $instrument,
+                'record'     => (string) $record,
+            ]);
+            return ['status' => 'error', 'message' => 'This is not the BP+ capture instrument.'];
+        }
+
         $xml = $payload['xml'] ?? '';
 
-        // Cheap, and it is the whole check: this only ever receives what the
-        // device produced, and anything else is a mistake worth naming rather
-        // than a file worth keeping.
-        if ($xml === '' || strpos($xml, '<BPplus') === false) {
+        // A payload is whatever was posted, so it can be an array or a number
+        // as easily as a string. strpos() on an array is a TypeError in PHP 8.
+        if (!is_string($xml)) {
             return ['status' => 'error', 'message' => 'That does not look like a BP+ measurement.'];
+        }
+
+        // Shaped like a result document, not merely containing the word. A
+        // substring test alone would accept any payload with "<BPplus" buried
+        // anywhere in it, which makes the endpoint a general-purpose place to
+        // put a file.
+        $trimmed = ltrim($xml);
+        $startsRight = strncmp($trimmed, '<?xml', 5) === 0 || strncmp($trimmed, '<BPplus', 7) === 0;
+
+        if (!$startsRight || strpos($xml, '<BPplus') === false || strpos($xml, '</BPplus>') === false) {
+            return ['status' => 'error', 'message' => 'That does not look like a BP+ measurement.'];
+        }
+
+        // A single suprasystolic result measures about 80 kB, nearly all of it
+        // base64 pressure traces, and a multi-reading AOBP result is a multiple
+        // of that. The default is far above any of them: the point is to stop
+        // the endpoint being used to store arbitrary files, not to fit a result
+        // closely, and a cap that rejects a real measurement loses data from a
+        // participant who has already been measured.
+        $limit = $this->maxRecordingBytes();
+        if (strlen($xml) > $limit) {
+            $this->log('BP+ recording refused', [
+                'reason' => 'over the size limit',
+                'record' => (string) $record,
+                'bytes'  => strlen($xml),
+                'limit'  => $limit,
+            ]);
+            return ['status' => 'error', 'message' => 'Recording exceeds the maximum supported size.'];
         }
 
         $field = $this->fieldPrefix() . self::XML_FIELD_SUFFIX;
@@ -304,6 +363,46 @@ class BpPlusDataCapture extends AbstractExternalModule
         return (float) $configured;
     }
 
+    /**
+     * The largest recording this project will accept, in bytes.
+     *
+     * Clamped, not merely defaulted. This bounds an endpoint an unauthenticated
+     * survey respondent can reach, so a mistyped setting -- 1000 where 10 was
+     * meant -- must not turn it into somewhere to put anything at all.
+     */
+    private function maxRecordingBytes(): int
+    {
+        $configured = trim((string) $this->getProjectSetting('max-recording-mb'));
+        $mb = is_numeric($configured) ? (float) $configured : self::DEFAULT_MAX_MB;
+
+        $mb = max(self::MIN_MAX_MB, min(self::LIMIT_MAX_MB, $mb));
+
+        return (int) round($mb * 1024 * 1024);
+    }
+
+    /**
+     * Which of the four things to send the device as a patient ID.
+     *
+     * Blank is the default rather than "off": the device keeps this in its own
+     * result file and on its SD card, and it is what reconciles a card full of
+     * recordings back to records when REDCap has no copy -- a browser that
+     * died, a survey abandoned before its submit. A record number is already a
+     * pseudonym, so sending one exposes nothing a card reader could use.
+     */
+    private function patientIdMode(): string
+    {
+        $configured = trim((string) $this->getProjectSetting('patient-id-mode'));
+        $known = ['record', 'template', 'off'];
+
+        return in_array($configured, $known, true) ? $configured : 'default';
+    }
+
+    /** The template, when the mode says to use one. */
+    private function patientIdTemplate(): string
+    {
+        return trim((string) $this->getProjectSetting('patient-id-template'));
+    }
+
     /** The MeasureMode the device must report, or null for "any". */
     private function requiredMode(): ?int
     {
@@ -330,6 +429,13 @@ class BpPlusDataCapture extends AbstractExternalModule
 
             'sdkUrl'          => $this->getUrl('sdk/index.js'),
             'fieldPrefix'     => $this->fieldPrefix(),
+
+            // Composed in the browser rather than here, because the record can
+            // change on the page between measurements -- the test harness edits
+            // it, and a study could too -- and a value fixed at render time
+            // would then label a reading with the participant before it.
+            'patientIdMode'     => $this->patientIdMode(),
+            'patientIdTemplate' => $this->patientIdTemplate(),
 
             'saveXmlAsFile'         => (bool) $this->getProjectSetting('save-xml-file'),
             'clockToleranceMinutes' => $this->clockToleranceMinutes(),

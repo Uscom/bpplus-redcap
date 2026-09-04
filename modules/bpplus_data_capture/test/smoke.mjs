@@ -420,6 +420,56 @@ console.log('\nthe form is told which document to keep');
     /minimalXml/.test(module) && /65535/.test(module));
 }
 
+// -- Is the patient ID composed the way the device will take it? ---------------
+// The device writes this verbatim into its own result file and keeps it on the
+// SD card, so it is what reconciles a card full of recordings back to records.
+// The rule for what it may contain belongs to the SDK; a copy kept here would
+// go on enforcing whatever it said when it was copied.
+
+console.log('\nthe patient ID is composed from the SDK rule');
+
+{
+  const module = fs.readFileSync(
+    new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+
+  check('the module composes rather than sending the record raw',
+    /composePatientId\(/.test(module) && /\[record\]/.test(module));
+
+  check('and sanitises with the SDK, not a rule of its own',
+    /sdk\.sanitisePatientId\(/.test(module));
+
+  // The specific regression: three consumers each kept /[^A-Za-z0-9-]/ and all
+  // three would have gone on refusing values the specification allows.
+  check('no copy of the character rule is left in the module',
+    !/A-Za-z0-9-/.test(module));
+
+  check('an over-long ID is refused rather than truncated',
+    /PATIENT_ID_MAX_LENGTH/.test(module) && !/\.slice\(0,\s*64\)/.test(module));
+
+  check('a measurement still happens when the ID cannot be composed',
+    /No patient ID was sent to the device/.test(module));
+
+  const sdk = fs.readFileSync(
+    new URL('../sdk/core/commands.js', import.meta.url), 'utf8');
+
+  check('the vendored SDK exports the sanitiser the module calls',
+    /export function sanitisePatientId/.test(sdk));
+
+  // The rule itself, checked against the specification rather than against
+  // whatever the SDK happens to say: printable ASCII minus four characters.
+  check('and enforces printable ASCII minus the four the device cannot take',
+    /\\x20-\\x7E/.test(sdk) && /PATIENT_ID_FORBIDDEN/.test(sdk));
+
+  const harness = fs.readFileSync(
+    new URL('../test/harness.html', import.meta.url), 'utf8');
+
+  check('the harness can drive every patient ID mode',
+    /patientidmode/.test(harness) && /patientIdTemplate/.test(harness));
+
+  check('and checks the ID came back out of the result document',
+    /the patient ID came back out of the result document/.test(harness));
+}
+
 // -- Is a result a reading? ---------------------------------------------------
 // A result block is not the same as a measurement. When the cuff cannot be
 // inflated the device ends the request and returns a result with no blood

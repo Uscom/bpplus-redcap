@@ -314,17 +314,58 @@
     }
 
     /**
-     * The record ID, sent to the device so the measurement identifies itself in
-     * its own XML.
+     * What to send the device as the patient ID, and why it might be nothing.
      *
-     * The device accepts letters, digits and hyphens; a REDCap record ID can
-     * hold characters it will refuse, so anything else becomes a hyphen rather
-     * than costing an F 14 at the start of a measurement.
+     * The device writes this verbatim into its own result file and keeps it on
+     * the SD card when one is fitted, so it is what reconciles a card full of
+     * recordings back to records -- including in the case that matters most,
+     * where REDCap never got the reading at all.
+     *
+     * Composed here rather than on the server because the record can change on
+     * the page between measurements. Sanitised by the SDK, never by a copy of
+     * the rule kept here: three consumers each had their own, and all three
+     * went on enforcing a rule the SDK had already changed.
+     *
+     * Never truncated. An over-long ID is refused instead, because shortening
+     * one is how two participants come to share it -- which would quietly undo
+     * the only thing this value is for.
+     *
+     * @returns {{value: string, problem: string}}
      */
-    function patientId() {
-      var raw = config().record;
-      raw = String(raw === undefined || raw === null ? '' : raw);
-      return raw.replace(/[^A-Za-z0-9-]/g, '-').slice(0, 64);
+    function composePatientId() {
+      var cfg = config();
+      var mode = cfg.patientIdMode || 'default';
+      if (mode === 'off') return { value: '', problem: '' };
+
+      var template = mode === 'record'   ? '[record]'
+                   : mode === 'template' ? String(cfg.patientIdTemplate || '')
+                   : 'REDCAP-[record]-[instance]';
+
+      if (template === '') {
+        return { value: '', problem: 'the patient ID template is empty' };
+      }
+
+      var record = String(cfg.record === undefined || cfg.record === null ? '' : cfg.record);
+      var composed = template
+        .replace(/\[record\]/g, record)
+        .replace(/\[instance\]/g, String(cfg.repeat_instance || 1));
+
+      if (!sdk || typeof sdk.sanitisePatientId !== 'function') {
+        return { value: '', problem: 'this SDK cannot check a patient ID' };
+      }
+
+      var safe = sdk.sanitisePatientId(composed);
+      var limit = sdk.PATIENT_ID_MAX_LENGTH || 64;
+
+      if (safe.length > limit) {
+        return {
+          value: '',
+          problem: 'the patient ID came to ' + safe.length + ' characters, and the ' +
+                   'device takes ' + limit,
+        };
+      }
+
+      return { value: safe, problem: '' };
     }
 
     /**
@@ -586,12 +627,21 @@
       showAlerts([], null);
       setStatus('normal', 'Measuring — keep the arm still and do not talk.');
 
+      // Worked out before the measurement so a problem with it is reported
+      // with the result rather than lost behind "Measuring". A patient ID that
+      // cannot be composed is not a reason to refuse a participant who is
+      // already sitting there: the measurement goes ahead without one.
+      var who = composePatientId();
+      if (who.problem) {
+        console.warn('[BP+] no patient ID was sent: ' + who.problem);
+      }
+
       var measurement;
       busy = true;
       updateButtons();
       try {
         await syncClock();
-        measurement = await device.measure({ patientId: patientId() });
+        measurement = await device.measure({ patientId: who.value });
       } catch (error) {
         setStatus('error', describe(error));
         showAlerts(error.alerts, null);
@@ -654,7 +704,12 @@
 
       // The readings are in the fields but not yet in the database: only a
       // submit puts them there. The recording is already on the record.
-      var keep = ' Save the form to keep the readings.';
+      // Said with the result, not instead of it. The reading is good; what is
+      // missing is the label that would have identified it on the device's own
+      // SD card, and only somebody configuring the project can fix that.
+      var keep = (who.problem ? ' No patient ID was sent to the device: ' +
+                                who.problem + '.' : '') +
+                 ' Save the form to keep the readings.';
       var ok = saved && saved.status === 'saved';
 
       if (!config().saveXmlAsFile) {

@@ -93,7 +93,7 @@ This project is a starting point and is meant to be edited.</redcap:ProjectNotes
 	<ItemGroupDef OID="bpplus_measurement.bpplus_measurement_complete" Name="Form Status" Repeating="No">
 		<ItemRef ItemOID="bpplus_measurement_complete" Mandatory="No" redcap:Variable="bpplus_measurement_complete"/>
 	</ItemGroupDef>
-	<ItemDef OID="record_id" Name="record_id" DataType="text" Length="999" redcap:Variable="record_id" redcap:FieldType="text" redcap:FieldNote="Sent to the BP+ as the patient ID, so the measurement identifies itself in its own XML.">
+	<ItemDef OID="record_id" Name="record_id" DataType="text" Length="999" redcap:Variable="record_id" redcap:FieldType="text" redcap:FieldNote="Part of the patient ID sent to the BP+, so a recording on the device names the record it belongs to. Keep it a pseudonym: the device keeps that value on its SD card, which is removable.">
 		<Question><TranslatedText>Record ID</TranslatedText></Question>
 	</ItemDef>
 	<ItemDef OID="first_name" Name="first_name" DataType="text" Length="999" redcap:Variable="first_name" redcap:FieldType="text" redcap:FieldNote="Optional. Delete this field, or replace it with your own identifiers." redcap:Identifier="y">

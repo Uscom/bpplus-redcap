@@ -2,7 +2,7 @@
   "name": "BP+ Data Capture",
   "namespace": "Uscom\\BpPlusDataCapture",
   "description": "Records a blood-pressure measurement from a Uscom BP+ device directly into a REDCap instrument, and keeps the device's own result XML as a file on the record. An example module, meant to be copied and edited.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "documentation": "README.md",
   "authors": [
     {
@@ -49,6 +49,30 @@
       "key": "save-xml-file",
       "name": "<b>Store the raw measurement XML as a file on the record</b><br>Needs a File Upload field named <code>&lt;prefix&gt;xml</code>. A full result runs past 100&nbsp;kB, which no text field will hold, so this is where the XML belongs.",
       "type": "checkbox"
+    },
+    {
+      "key": "patient-id-mode",
+      "name": "<b>What to send the device as the patient ID</b><br>The device writes this verbatim into its own result file, and keeps it on the SD card when one is fitted &mdash; so it is what reconciles a card full of recordings back to records. Send a pseudonym and nothing else: a card is removable and nothing on it is access-controlled.",
+      "type": "dropdown",
+      "required": false,
+      "choices": [
+        { "value": "",         "name": "REDCAP-&lt;record&gt;-&lt;instance&gt; (default)" },
+        { "value": "record",   "name": "The record ID on its own" },
+        { "value": "template", "name": "The template below" },
+        { "value": "off",      "name": "Nothing -- the device stores no patient ID" }
+      ]
+    },
+    {
+      "key": "patient-id-template",
+      "name": "<b>Patient ID template</b><br>Used when the setting above says so. <code>[record]</code> and <code>[instance]</code> are replaced; everything else is sent as typed. A study code in front keeps one device's card unambiguous when it is shared between projects &mdash; but use a neutral code, not one that names the condition being studied.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "max-recording-mb",
+      "name": "<b>Largest recording this project will accept (MB)</b><br>Blank uses 1, which is many times the size of any real measurement. Anything larger is refused, so the endpoint cannot be used to store arbitrary files. Values outside 0.1 to 16 are brought back inside it.",
+      "type": "text",
+      "required": false
     },
     {
       "key": "clock-tolerance-minutes",

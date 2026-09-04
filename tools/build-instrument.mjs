@@ -148,7 +148,7 @@ const PARTICIPANT = [
   // here would make this file claim something the project will not have.
   { variable: 'record_id', form: 'participant', section: '',
     type: 'text', label: 'Record ID', choices: '',
-    note: 'Sent to the BP+ as the patient ID, so the measurement identifies itself in its own XML.',
+    note: 'Part of the patient ID sent to the BP+, so a recording on the device names the record it belongs to. Keep it a pseudonym: the device keeps that value on its SD card, which is removable.',
     validation: '', min: '', max: '', annotation: '' },
 
   // Marked as identifiers, which is what they are. REDCap uses the flag to

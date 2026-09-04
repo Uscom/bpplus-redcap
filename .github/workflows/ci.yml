@@ -37,6 +37,14 @@ jobs:
       - name: PHP lints
         run: find modules -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: What the save-xml endpoint refuses
+        # save-xml is reachable by an unauthenticated survey respondent, so the
+        # checks in front of it are worth running rather than reading.
+        run: |
+          for test in modules/*/test/guards.php; do
+            [ -f "$test" ] && php "$test"
+          done
+
       - name: JavaScript parses
         run: find modules -name '*.js' -not -path '*/node_modules/*' -print0 | xargs -0 -n1 node --check
 

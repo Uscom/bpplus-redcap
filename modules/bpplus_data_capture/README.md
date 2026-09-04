@@ -120,10 +120,41 @@ records the choice.
 
 ### Patient ID
 
-The record ID is sent to the device as the patient ID, so the measurement
-identifies itself in its own XML. The device accepts letters, digits and
-hyphens; anything else becomes a hyphen rather than costing an `F 14` at the
-start of a measurement.
+The device writes this verbatim into its own result file, and keeps it when an
+SD card is fitted. That is what it is for: **reconciling a card full of
+recordings back to records** — including in the case that matters most, where
+REDCap never got the reading at all because a browser died or a survey was
+abandoned before its submit.
+
+By default the module sends `REDCAP-<record>-<instance>`. Each part earns its
+place: the prefix keeps one device's card unambiguous when it is shared between
+projects, the record is the pseudonym REDCap already uses, and the instance
+separates repeat measurements on the same participant, which would otherwise be
+told apart only by the clock.
+
+Four choices, in the module settings:
+
+| | |
+|---|---|
+| *(default)* | `REDCAP-<record>-<instance>` |
+| Record ID | the record ID on its own |
+| Template | `[record]` and `[instance]` substituted into whatever you type |
+| Nothing | the device stores no patient ID |
+
+**Send a pseudonym and nothing else.** An SD card is removable, it leaves the
+clinic in the device, and nothing on it is access-controlled — so no initials,
+no date of birth, no MRN. Use a neutral study code too: `HEPC-0011` on a lost
+device discloses something about eleven people that `USC01-0011` does not.
+
+Note that REDCap lets a project use anything as its record ID, including a
+surname or an MRN. If yours does, do not send it.
+
+The device accepts printable ASCII except `,`, `<`, `&` and `>`, up to 64
+characters. The module composes the value, hands it to the SDK's
+`sanitisePatientId()` — the rule lives there, not here — and if the result is
+still too long it sends **nothing** rather than a shortened version, because
+shortening an identifier is how two participants come to share one. The
+measurement goes ahead either way, and the status line says what happened.
 
 ### The device clock
 
