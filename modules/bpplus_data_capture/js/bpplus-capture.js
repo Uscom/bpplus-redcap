@@ -11,9 +11,14 @@
  * plain and another can carry the technical panels without a setting to say so.
  *
  *   #bpplus-connect       opens the browser's device picker
- *   #bpplus-measure       takes one measurement
+ *   #bpplus-measure       takes one measurement. Its label becomes Cancel while
+ *                         the cuff is inflating and Repeat once a reading has
+ *                         been taken -- one control, saying what it will do
  *   #bpplus-status        the single large status line
- *   #bpplus-cancel        optional; live only while the cuff is inflating
+ *   #bpplus-resend        optional; shown only after a filing has failed, and
+ *                         built here if the instrument does not declare one
+ *   #bpplus-cancel        optional, and no longer in the shipped instrument;
+ *                         still honoured where one exists
  *   #bpplus-ping          optional; confirms the link is live
  *   #bpplus-results       optional; the reading, shown to the operator
  *   #bpplus-alerts        optional; what the device said was wrong, in its words
@@ -94,8 +99,14 @@
     var lastMeasurement = null;
     var lastClockSync = null;
     var busy = false;           // a measurement is on the arm right now
+    var cancelling = false;     // a cancel has been sent and not yet answered
     var filing = false;         // the recording is on its way to the server
     var stored = false;         // at least one reading has reached the record
+    var pendingXml = null;      // a recording the server would not take
+
+    // Captured before anything relabels it, so a study's own wording survives
+    // being turned into Cancel and back.
+    var MEASURE_LABEL = ui.measure ? ui.measure.textContent.trim() : '';
 
     var fields = fieldNames(config().fieldPrefix || DEFAULT_PREFIX);
 
@@ -288,6 +299,22 @@
         return window.BPPLUS_TRANSPORT(api, options);
       }
 
+      // A project setting, so the survey, the file storage and the record can
+      // be tested where there is no BP+ and no cable -- which is most of what
+      // needs testing. Everything downstream of the device runs exactly as it
+      // does for real, which is the point and also the danger: the readings are
+      // invented. Hence the banner, the console warning, and the device id
+      // every record is written with.
+      if (config().simulator) {
+        console.warn('[BP+] SIMULATED DEVICE. Readings are fabricated.');
+        return new api.SimulatorTransport({
+          // Fast, not lifelike. This exists to exercise the page and the record,
+          // and nobody testing a file upload should wait out a real inflation to
+          // reach it.
+          tickMs: 2,
+        });
+      }
+
       // Into the constructor. Threading it this far and no further is the
       // mistake that makes a resume call requestPort() anyway.
       var silent = options.silent === true;
@@ -346,9 +373,22 @@
       }
 
       var record = String(cfg.record === undefined || cfg.record === null ? '' : cfg.record);
-      var composed = template
-        .replace(/\[record\]/g, record)
-        .replace(/\[instance\]/g, String(cfg.repeat_instance || 1));
+      var parts = {
+        record: record,
+        instance: String(cfg.repeat_instance || 1),
+      };
+
+      // [record] and [instance], each optionally :N to pad with leading zeros
+      // so a column of these sorts. Padded to at least N and never cut down to
+      // it: a record id longer than the width is left whole, because shortening
+      // one is how two participants come to share it.
+      var composed = template.replace(/\[(record|instance)(?::(\d+))?\]/g,
+        function (whole, name, width) {
+          var value = parts[name];
+          var pad = width ? Number(width) : 0;
+          while (value.length < pad) value = '0' + value;
+          return value;
+        });
 
       if (!sdk || typeof sdk.sanitisePatientId !== 'function') {
         return { value: '', problem: 'this SDK cannot check a patient ID' };
@@ -422,7 +462,13 @@
 
       setFieldValue(fields.datetime,  redcapTimestamp(measurement.timestamp));
       setFieldValue(fields.guid,      measurement.guid);
-      setFieldValue(fields.device_id, measurement.deviceId);
+      // Marked in the record, not only on the screen. The simulator answers
+      // with a plausible device id and a reading that looks like every other
+      // reading, and a fabricated one that cannot be told apart in an export is
+      // the single thing this feature must not produce. Whoever reads that
+      // export later was not in the room.
+      setFieldValue(fields.device_id,
+        config().simulator ? 'SIMULATED-' + measurement.deviceId : measurement.deviceId);
 
       var rhythm = measurement.rhythm;
       if (rhythm.known) setRadio(fields.irregular, rhythm.irregular ? '1' : '0');
@@ -526,10 +572,37 @@
      * NIBP module's raw reply: it belongs in the console and in a support
      * report, and means nothing to the person holding the cuff.
      */
-    function showAlerts(alerts, quality) {
+    function showAlerts(alerts, quality, succeeded) {
       if (!ui.alerts) return;
 
-      var list = alerts || [];
+      var every = alerts || [];
+
+      // Logged in full whatever is shown. The console keeps the device's whole
+      // account; what follows decides only what the operator is asked to react
+      // to.
+      for (var j = 0; j < every.length; j++) {
+        console.warn('[BP+] device alert (' + every[j].severity + ')' +
+                     (every[j].readings.length ? ' BP' + every[j].readings.join('/') : '') +
+                     ': ' + every[j].message +
+                     ' [' + (every[j].tm2917_hex_result || 'no hex') + ']');
+      }
+
+      // A determination the device could not measure is retried, up to three
+      // times, and reported afterwards even when a later attempt succeeded. So
+      // a measurement that came back clean still carries "Unable to measure BP:
+      // Please Repeat" from the attempt that was thrown away -- shown in red,
+      // over a good reading, with nothing for the operator to do about it.
+      // Motion during one attempt is the ordinary way to meet this.
+      //
+      // What matters clinically is whether the device finished. Recovered
+      // attempts are a real signal -- a participant who needs three goes every
+      // visit is worth knowing about -- but reporting them as errors teaches
+      // the operator to ignore the panel, which is worse than not showing them.
+      // A project that wants them turns the setting on.
+      var list = (succeeded && config().detailedWarnings !== true)
+        ? every.filter(function (alert) { return alert.severity === 'good'; })
+        : every;
+
       if (!list.length && !(quality && quality.known)) {
         ui.alerts.style.display = 'none';
         ui.alerts.innerText = '';
@@ -550,11 +623,6 @@
             ? 'BP' + alert.readings.join(' and BP') + ': ' + alert.message
             : alert.message);
         }
-
-        console.warn('[BP+] device alert (' + alert.severity + ')' +
-                     (alert.readings.length ? ' BP' + alert.readings.join('/') : '') +
-                     ': ' + alert.message +
-                     ' [' + (alert.tm2917_hex_result || 'no hex') + ']');
       }
 
       var summary;
@@ -624,7 +692,7 @@
         return false;
       }
 
-      showAlerts([], null);
+      showAlerts([], null, false);
       setStatus('normal', 'Measuring — keep the arm still and do not talk.');
 
       // Worked out before the measurement so a problem with it is reported
@@ -644,7 +712,7 @@
         measurement = await device.measure({ patientId: who.value });
       } catch (error) {
         setStatus('error', describe(error));
-        showAlerts(error.alerts, null);
+        showAlerts(error.alerts, null, false);
         console.error('[BP+]', error);
         return false;
       } finally {
@@ -666,8 +734,10 @@
       // writes empty readings into the record and reports success.
 
       lastMeasurement = measurement;
+      // The third argument says the device finished. A recovered retry is only
+      // noise when it is; when the measurement failed, every alert is evidence.
       showAlerts(sdk.alertsOf(measurement, features && features.bpRange),
-                 measurement.signalQuality);
+                 measurement.signalQuality, true);
 
       setStatus('normal', 'Saving…');
       storeResult(measurement);
@@ -701,6 +771,11 @@
       // Always, whichever way that went. A record that says nothing about a
       // recording it lost is worse than one that says it lost it.
       recordXmlText(measurement.xml, saved);
+
+      // Kept for the Resend button, and only while there is a reason for one.
+      pendingXml = (config().saveXmlAsFile && !(saved && saved.status === 'saved'))
+        ? measurement.xml : null;
+      showResend(!!pendingXml);
 
       // The readings are in the fields but not yet in the database: only a
       // submit puts them there. The recording is already on the record.
@@ -935,11 +1010,62 @@
      * cuff slipped) has to be repeatable without reloading the page.
      */
     function updateButtons() {
-      var ready = !!device && !busy && !filing;
-      setEnabled(ui.measure, ready);
-      setEnabled(ui.ping,    ready);
-      setEnabled(ui.cancel,  !!device && busy);
+      var connected = !!device;
+
+      // Live during a measurement too, because then it is the Cancel button.
+      setEnabled(ui.measure, connected && !filing && !cancelling);
+      setEnabled(ui.ping,    connected && !busy && !filing);
+      setEnabled(ui.cancel,  connected && busy && !cancelling);
       setSubmitEnabled(!busy && !filing);
+      relabel();
+    }
+
+    /**
+     * One button, saying what pressing it will do.
+     *
+     * "Measure" becomes "Cancel" while the cuff is inflating and "Repeat" once
+     * a reading has been taken. A separate Repeat button beside Measure would
+     * do exactly the same thing, leaving the operator two controls for one
+     * action and no way to tell them apart.
+     *
+     * Only the word is swapped, so whatever the instrument called the button
+     * survives -- "Measure blood pressure" keeps its wording -- and a label
+     * that never said "Measure" is left alone rather than guessed at.
+     */
+    function relabel() {
+      if (!ui.measure || !MEASURE_LABEL) return;
+
+      var wanted = busy   ? MEASURE_LABEL.replace(/\bMeasure\b/, 'Cancel')
+                 : stored ? MEASURE_LABEL.replace(/\bMeasure\b/, 'Repeat')
+                 : MEASURE_LABEL;
+
+      if (ui.measure.textContent !== wanted) ui.measure.textContent = wanted;
+    }
+
+    /**
+     * Stop a measurement that is running.
+     *
+     * Locked immediately: the device answers a cancel with one F 02 and one
+     * M 02, and a second `c` arriving between them has nothing left to cancel.
+     * The measurement's own promise rejects with F 02, so the status line and
+     * the buttons are restored by the handler that started it.
+     */
+    async function cancelMeasurement() {
+      if (!device || !busy || cancelling) return;
+
+      cancelling = true;
+      updateButtons();
+      setStatus('normal', 'Cancelling…');
+      try {
+        await device.cancel();
+      } catch (error) {
+        // A cancel that cannot be sent is not itself a measurement failure, and
+        // the measurement will report whatever actually happened to it.
+        console.warn('[BP+] cancel could not be sent:', error.message);
+      } finally {
+        cancelling = false;
+        updateButtons();
+      }
     }
 
     /**
@@ -1014,6 +1140,9 @@
 
     if (ui.measure) {
       ui.measure.addEventListener('click', function () {
+        // The same control, doing whatever its label currently says.
+        if (busy) { cancelMeasurement(); return; }
+
         if (stored) {
           // Said only to the console: the operator asked for it, and the status
           // line is about to be taken over by the measurement itself.
@@ -1023,24 +1152,10 @@
       });
     }
 
+    // Kept working for an instrument that still has one, though the shipped
+    // instrument no longer does: Measure becomes Cancel instead.
     if (ui.cancel) {
-      ui.cancel.addEventListener('click', async function () {
-        if (!device) return;
-
-        // Disabled immediately: the device answers a cancel with one F 02 and
-        // one M 02, and a second `c` arriving between them has nothing left to
-        // cancel. The measurement's own promise rejects with F 02, so the status
-        // line and the buttons are restored by the handler that started it.
-        setEnabled(ui.cancel, false);
-        setStatus('normal', 'Cancelling…');
-        try {
-          await device.cancel();
-        } catch (error) {
-          // A cancel that cannot be sent is not itself a measurement failure,
-          // and the measurement will report whatever actually happened to it.
-          console.warn('[BP+] cancel could not be sent:', error.message);
-        }
-      });
+      ui.cancel.addEventListener('click', cancelMeasurement);
     }
 
     /**
@@ -1074,6 +1189,125 @@
         }
       });
     }
+
+    /**
+     * The Resend control, which exists only when there is something to resend.
+     *
+     * Taken from the instrument when it declares one, and built here when it
+     * does not -- so the shipped instrument can style and place it, and a
+     * project still on an older instrument is not left without a way to recover
+     * a recording. Hidden until a filing has actually failed: a button that
+     * does nothing most of the time is one an operator learns to ignore.
+     */
+    function resendControl() {
+      var button = document.getElementById('bpplus-resend');
+
+      if (!button) {
+        if (!ui.status || !ui.status.parentNode) return null;
+
+        button = document.createElement('button');
+        button.id = 'bpplus-resend';
+        button.type = 'button';
+        button.textContent = 'Resend recording';
+        button.style.display      = 'none';
+        button.style.marginTop    = '10px';
+        button.style.padding      = '10px 18px';
+        button.style.fontWeight   = '600';
+        button.style.cursor       = 'pointer';
+        button.style.borderRadius = '8px';
+
+        ui.status.parentNode.insertBefore(button, ui.status.nextSibling);
+      }
+
+      // Wired here, not only where the button is built. One declared by the
+      // instrument arrives with no handler on it, and a Resend button that
+      // does nothing when pressed is worse than none at all -- the operator
+      // believes the recording has been sent.
+      if (!button.dataset.bpplusWired) {
+        button.dataset.bpplusWired = '1';
+        button.addEventListener('click', resend);
+      }
+
+      return button;
+    }
+
+    function showResend(show) {
+      var button = resendControl();
+      if (!button) return;
+      button.style.display = show ? '' : 'none';
+      setEnabled(button, show);
+    }
+
+    /**
+     * Send a recording the server would not take the first time.
+     *
+     * This is the only retry there is. The recording exists in this page and
+     * nowhere else -- the reduced copy in <prefix>xml_text is a fallback, not
+     * the document -- so once the page is gone, so is it.
+     */
+    async function resend() {
+      if (!pendingXml || filing) return;
+
+      var button = resendControl();
+      setEnabled(button, false);
+      setStatus('normal', 'Sending the recording…');
+
+      var saved;
+      filing = true;
+      updateButtons();
+      try {
+        saved = await saveXmlAsFile(pendingXml);
+      } finally {
+        filing = false;
+        updateButtons();
+      }
+
+      // Written before the pending copy is dropped, so the marker replaces the
+      // fallback text the failure put in the field.
+      recordXmlText(pendingXml, saved);
+
+      if (saved && saved.status === 'saved') {
+        pendingXml = null;
+        showResend(false);
+        setStatus('success', 'The recording is saved. Save the form to keep the readings.');
+        return;
+      }
+
+      setEnabled(button, true);
+      setStatus('error', 'The recording still could not be saved. ' +
+        sentence((saved && saved.message) || 'See the browser console.'));
+    }
+
+    /**
+     * A standing warning that the readings are invented.
+     *
+     * Its own element, above the status line, deliberately. The status line is
+     * rewritten by every step of every measurement, so a warning put there is
+     * gone the moment anything happens -- which is exactly when it matters.
+     * Nothing removes this one.
+     */
+    function showSimulatorBanner() {
+      if (!config().simulator || !ui.status || !ui.status.parentNode) return;
+      if (document.getElementById('bpplus-simulator-banner')) return;
+
+      var banner = document.createElement('div');
+      banner.id = 'bpplus-simulator-banner';
+      banner.textContent =
+        'SIMULATED BP+ — no device is connected and these readings are ' +
+        'fabricated. For testing only. Do not use for participants.';
+      banner.style.background   = '#fdecea';
+      banner.style.border       = '2px solid #b71c1c';
+      banner.style.color        = '#b71c1c';
+      banner.style.borderRadius = '8px';
+      banner.style.padding      = '12px 16px';
+      banner.style.marginBottom = '12px';
+      banner.style.fontWeight   = '700';
+      banner.style.fontSize     = '16px';
+
+      ui.status.parentNode.insertBefore(banner, ui.status);
+    }
+
+    showSimulatorBanner();
 
     var locked = readOnlyReason();
     if (locked) {

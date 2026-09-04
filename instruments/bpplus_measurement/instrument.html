@@ -13,8 +13,15 @@
   dead buttons and no error anywhere.
 
       #bpplus-connect   #bpplus-measure   #bpplus-status      required
-      #bpplus-cancel    #bpplus-ping                          optional
+      #bpplus-ping      #bpplus-resend                       optional
       #bpplus-alerts    #bpplus-results   #bpplus-device-info  optional
+
+  There is no Cancel button. #bpplus-measure becomes Cancel while the cuff is
+  inflating and Repeat once a reading has been taken, because a separate button
+  beside it would do the same thing and leave two controls for one action.
+
+  #bpplus-resend stays hidden unless a recording could not be filed. A button
+  that does nothing most of the time is one an operator learns to ignore.
 
   type="button" on every button is not decoration. A <button> inside a REDCap
   form defaults to type="submit", so a button without it saves the record and
@@ -30,8 +37,8 @@
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
   <button type="button" id="bpplus-connect" class="btn btn-primaryrc">Connect BP+</button>
   <button type="button" id="bpplus-measure" class="btn btn-primaryrc" disabled>Measure</button>
-  <button type="button" id="bpplus-cancel" class="btn btn-defaultrc" disabled>Cancel</button>
   <button type="button" id="bpplus-ping" class="btn btn-defaultrc" disabled>Check device</button>
+  <button type="button" id="bpplus-resend" class="btn btn-defaultrc" style="display:none;">Resend recording</button>
 </div>
 
 <div id="bpplus-alerts" style="display:none;"></div>

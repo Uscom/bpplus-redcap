@@ -19,7 +19,7 @@ Copy `modules/bpplus_data_capture/` into REDCap's `modules/` directory, renamed
 to include the version:
 
 ```
-redcap/modules/bpplus_data_capture_v1.2.0/
+redcap/modules/bpplus_data_capture_v1.3.0/
     config.json
     BpPlusDataCapture.php
     js/

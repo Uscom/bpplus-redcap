@@ -38,8 +38,12 @@ class BpPlusDataCapture extends AbstractExternalModule
      * a tight fit can reject a real measurement.
      */
     private const DEFAULT_MAX_MB = 1.0;
-    private const MIN_MAX_MB     = 0.1;
-    private const LIMIT_MAX_MB   = 16.0;
+    private const MIN_MAX_MB     = 0.2;
+
+    // The ceiling is the default: a project may lower this limit and never
+    // raise it. Nothing a device produces comes near 1 MB, so a project asking
+    // for more is not describing a measurement.
+    private const LIMIT_MAX_MB   = 1.0;
 
     /**
      * The suffix of the File Upload field the raw XML is stored in.
@@ -442,6 +446,16 @@ class BpPlusDataCapture extends AbstractExternalModule
             'requiredMode'          => $this->requiredMode(),
             'hostStartedOnly'       => (bool) $this->getProjectSetting('host-started-only'),
             'trace'                 => (bool) $this->getProjectSetting('trace'),
+
+            // The device retries a determination it could not measure and still
+            // reports the attempt it threw away, so a clean reading arrives
+            // carrying a failure nobody can act on. Off by default.
+            'detailedWarnings'      => (bool) $this->getProjectSetting('show-recovered-warnings'),
+
+            // Fabricated readings. Everything downstream of the device runs
+            // exactly as it does for real, which is the point and also the
+            // danger -- see the banner and the device id in the page script.
+            'simulator'             => (bool) $this->getProjectSetting('simulator'),
         ];
 
         // json_encode with the HEX_* flags escapes everything that could close

@@ -2,7 +2,7 @@
   "name": "BP+ Data Capture",
   "namespace": "Uscom\\BpPlusDataCapture",
   "description": "Records a blood-pressure measurement from a Uscom BP+ device directly into a REDCap instrument, and keeps the device's own result XML as a file on the record. An example module, meant to be copied and edited.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "documentation": "README.md",
   "authors": [
     {
@@ -56,7 +56,7 @@
       "type": "dropdown",
       "required": false,
       "choices": [
-        { "value": "",         "name": "REDCAP-&lt;record&gt;-&lt;instance&gt; (default)" },
+        { "value": "",         "name": "REDCAP-[record]-[instance] (default)" },
         { "value": "record",   "name": "The record ID on its own" },
         { "value": "template", "name": "The template below" },
         { "value": "off",      "name": "Nothing -- the device stores no patient ID" }
@@ -70,7 +70,7 @@
     },
     {
       "key": "max-recording-mb",
-      "name": "<b>Largest recording this project will accept (MB)</b><br>Blank uses 1, which is many times the size of any real measurement. Anything larger is refused, so the endpoint cannot be used to store arbitrary files. Values outside 0.1 to 16 are brought back inside it.",
+      "name": "<b>Largest recording this project will accept (MB)</b><br>Blank uses 1, which is many times the size of any real measurement. Anything larger is refused, so the endpoint cannot be used to store arbitrary files. A project may lower this to 0.2 but not raise it above 1 &mdash; a value outside that range is brought back inside it.",
       "type": "text",
       "required": false
     },
@@ -97,8 +97,18 @@
       "type": "checkbox"
     },
     {
+      "key": "show-recovered-warnings",
+      "name": "<b>Show warnings from attempts the device recovered from</b><br>The BP+ retries a determination it could not measure and reports the discarded attempt even when a later one succeeded &mdash; so a good reading arrives carrying a warning nobody can act on. Off by default: the alerts are recorded either way, and reporting them trains an operator to ignore the panel.",
+      "type": "checkbox"
+    },
+    {
       "key": "trace",
       "name": "<b>Log every serial line to the browser console</b><br>Troubleshooting only.",
+      "type": "checkbox"
+    },
+    {
+      "key": "simulator",
+      "name": "<b>TESTING ONLY &mdash; simulated BP+</b><br>Takes measurements from a built-in simulator instead of a real device, so the survey, the file storage and the record can be tested with no BP+ and no cable. <b>Readings are fabricated.</b> The page says so in a red banner, and every record is written with a device id beginning <code>SIMULATED-</code>. Never enable this on a project collecting real data.",
       "type": "checkbox"
     }
   ]

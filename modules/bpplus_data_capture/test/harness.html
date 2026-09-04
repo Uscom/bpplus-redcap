@@ -349,6 +349,9 @@ const settings = {
   // configuration mistake nobody sees until a measurement is taken.
   patientIdMode:     params.get('patientidmode') || 'default',
   patientIdTemplate: params.get('patientid') || '',
+
+  detailedWarnings:  params.get('warnings') === '1',
+  simulator:         params.get('simulated') === '1',
 };
 
 $('transport').value = settings.transport;
@@ -410,7 +413,11 @@ const FALLBACK_INSTRUMENT = `
 async function loadInstrument() {
   const banner = $('instrument-source');
   try {
-    const reply = await fetch(SHARED_INSTRUMENT);
+    // no-store, because the banner below claims this is the markup that ships.
+    // A cached copy makes that claim false while looking exactly the same: the
+    // harness goes on testing the instrument as it was, and the one thing a
+    // test rig must never do is quietly test something other than what it says.
+    const reply = await fetch(SHARED_INSTRUMENT, { cache: 'no-store' });
     if (!reply.ok) throw new Error('HTTP ' + reply.status);
     const html = (await reply.text()).replace(/<!--[\s\S]*?-->/g, '');
     banner.hidden = false;
@@ -519,6 +526,13 @@ window.BPPLUS_CONFIG = {
   // what comes out of the result document.
   patientIdMode: settings.patientIdMode,
   patientIdTemplate: settings.patientIdTemplate,
+
+  // ?warnings=1 shows the alerts a recovered retry left behind. The harness
+  // already substitutes its own transport, so the module's simulator setting
+  // never takes effect here -- but the device id it writes does, and that is
+  // the part a project could get wrong.
+  detailedWarnings: settings.detailedWarnings,
+  simulator: settings.simulator,
   // Passed explicitly for the same reason the server passes it: this page is not
   // in the same folder as the module's script, so a relative import would
   // resolve against the wrong directory.

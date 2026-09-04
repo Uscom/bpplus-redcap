@@ -468,6 +468,119 @@ console.log('\nthe patient ID is composed from the SDK rule');
 
   check('and checks the ID came back out of the result document',
     /the patient ID came back out of the result document/.test(harness));
+
+  // [record:5] pads to five and never cuts to five: shortening an identifier
+  // is how two participants come to share one.
+  check('a width may be asked for',
+    module.includes('(?::(\\d+))?'));
+  check('and it pads rather than truncates',
+    /while \(value\.length < pad\)/.test(module) && !/\.slice\(0, pad\)/.test(module));
+}
+
+// -- The controls, and the ones that are not there ----------------------------
+// One button that says what it will do, rather than a Measure and a Repeat that
+// do the same thing; and a Resend that appears only when there is something to
+// resend.
+
+console.log('\nthe controls say what they will do');
+
+{
+  const module = fs.readFileSync(
+    new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+  const instrument = fs.readFileSync(
+    new URL('../../../instruments/bpplus_measurement/instrument.html', import.meta.url), 'utf8');
+
+  check('Measure becomes Cancel and Repeat', /relabel\(/.test(module) &&
+    /Cancel/.test(module) && /Repeat/.test(module));
+
+  check('and stays live during a measurement, because then it cancels',
+    /connected && !filing && !cancelling/.test(module));
+
+  check('the shipped instrument has no separate Cancel button',
+    !/id="bpplus-cancel"/.test(instrument));
+
+  check('but one is still honoured where an instrument has it',
+    /ui\.cancel\.addEventListener/.test(module));
+
+  check('the shipped instrument declares the Resend button',
+    /id="bpplus-resend"/.test(instrument) && /display:none/.test(instrument));
+
+  // The regression: a button taken from the instrument was returned before the
+  // click handler was attached, so pressing Resend did nothing at all -- and
+  // the operator believes the recording has been sent.
+  check('a Resend button from the instrument gets its handler',
+    /bpplusWired/.test(module));
+
+  check('and one is built when the instrument has none',
+    /createElement\('button'\)/.test(module));
+
+  check('Resend is hidden unless a filing failed',
+    /showResend\(!!pendingXml\)/.test(module));
+}
+
+// -- Can a fabricated reading be told apart? ----------------------------------
+// The simulator exists so the survey, the file storage and the record can be
+// tested with no device. Everything downstream runs exactly as it does for
+// real, which is the point and also the danger.
+
+console.log('\na simulated reading cannot pass for a real one');
+
+{
+  const module = fs.readFileSync(
+    new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+  const config = JSON.parse(fs.readFileSync(
+    new URL('../config.json', import.meta.url), 'utf8'));
+
+  const setting = config['project-settings'].find(s => s.key === 'simulator');
+  check('the setting exists and says what it is', Boolean(setting) &&
+    /TESTING ONLY/.test(setting.name) && /fabricated/i.test(setting.name));
+
+  // Three marks, because one can be missed. The banner is on screen, the
+  // console carries it, and the device id survives into an export -- where
+  // whoever reads it was not in the room.
+  check('a banner says so on the page', /bpplus-simulator-banner/.test(module));
+  check('the console says so', /SIMULATED DEVICE/.test(module));
+  check('and the record says so, in the device id',
+    /'SIMULATED-' \+ measurement\.deviceId/.test(module));
+
+  // Its own element, not the status line: that is rewritten by every step of
+  // every measurement, so a warning put there is gone when it matters.
+  check('the banner is not the status line',
+    /insertBefore\(banner, ui\.status\)/.test(module));
+}
+
+// -- Are recovered retries reported as failures? ------------------------------
+// The device retries a determination it could not measure and reports the
+// attempt it threw away even when a later one succeeded, so a clean reading
+// arrives carrying a warning nobody can act on.
+
+console.log('\na recovered retry is not an error');
+
+{
+  const module = fs.readFileSync(
+    new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+
+  check('a successful measurement shows only good news by default',
+    /succeeded && config\(\)\.detailedWarnings !== true/.test(module));
+
+  check('but every alert is logged whatever is shown',
+    /Logged in full whatever is shown/.test(module));
+
+  // A failed measurement is the case where every alert is evidence.
+  check('a failed measurement still shows everything',
+    /showAlerts\(error\.alerts, null, false\)/.test(module));
+}
+
+// -- Does the harness test the instrument that ships? -------------------------
+// Its banner says it does. A cached copy makes that claim false while looking
+// identical, and the harness goes on testing the instrument as it was.
+
+{
+  const harness = fs.readFileSync(
+    new URL('../test/harness.html', import.meta.url), 'utf8');
+
+  check('the harness fetches the instrument past the cache',
+    /cache:\s*'no-store'/.test(harness));
 }
 
 // -- Is a result a reading? ---------------------------------------------------

@@ -56,11 +56,16 @@ which of these an administrator has to do and which a project owner can.
 |---|---|---|
 | Instrument that carries the BP+ controls | `bpplus_measurement` | Where the buttons live |
 | Field-name prefix | `bpplus_` | Every field name is built from it |
+| What to send the device as the patient ID | `REDCAP-[record]-[instance]` | See **Patient ID** |
+| Patient ID template | blank | Used when the setting above says so |
 | Store the raw measurement XML as a file | off | Needs a File Upload field. See below |
+| Largest recording this project will accept | 1 MB | May be lowered to 0.2, not raised |
 | Set the device clock when it is out by more than *n* minutes | 5 | See **The device clock** |
 | Require the device to be in a particular measurement mode | any | Refuses to measure otherwise |
 | Refuse a measurement started on the device itself | off | See below |
+| Show warnings from attempts the device recovered from | off | See **A warning on a measurement that worked** |
 | Log every serial line to the browser console | off | Troubleshooting only |
+| **TESTING ONLY** -- simulated BP+ | off | See **Testing without a device** |
 
 ---
 
@@ -73,9 +78,10 @@ Three are required:
 | Element | | Purpose |
 |---|---|---|
 | `#bpplus-connect` | required | Opens the browser's device picker |
-| `#bpplus-measure` | required | Takes one measurement |
+| `#bpplus-measure` | required | Takes one measurement. Becomes **Cancel** while the cuff inflates and **Repeat** once a reading has been taken |
 | `#bpplus-status` | required | The single large status line |
-| `#bpplus-cancel` | optional | Live only while the cuff is inflating |
+| `#bpplus-resend` | optional | Shown only after a filing failed. Built by the module if the instrument has none |
+| `#bpplus-cancel` | optional | No longer in the shipped instrument, and still honoured where one exists |
 | `#bpplus-ping` | optional | Confirms the link is live and the device still usable |
 | `#bpplus-results` | optional | The reading, shown large to the operator |
 | `#bpplus-alerts` | optional | What the device said was wrong, in its own words |
@@ -104,7 +110,7 @@ rather than an edit to this module.
 | Measurement GUID | `<p>guid` | |
 | Device ID | `<p>device_id` | Which physical device took the reading |
 | Capture status | `<p>status` | Set to `complete` when a reading is stored |
-| Raw XML | `<p>xml` | File Upload; written by the server |
+| Raw XML | `<p>xml` | File Upload; filed by the server, and its document id written back into the form |
 
 A field the module writes and the instrument does not have is reported once per
 measurement in the browser console, and the measurement continues. Silence there
@@ -126,7 +132,7 @@ recordings back to records** — including in the case that matters most, where
 REDCap never got the reading at all because a browser died or a survey was
 abandoned before its submit.
 
-By default the module sends `REDCAP-<record>-<instance>`. Each part earns its
+By default the module sends `REDCAP-[record]-[instance]`. Each part earns its
 place: the prefix keeps one device's card unambiguous when it is shared between
 projects, the record is the pseudonym REDCap already uses, and the instance
 separates repeat measurements on the same participant, which would otherwise be
@@ -136,7 +142,7 @@ Four choices, in the module settings:
 
 | | |
 |---|---|
-| *(default)* | `REDCAP-<record>-<instance>` |
+| *(default)* | `REDCAP-[record]-[instance]` |
 | Record ID | the record ID on its own |
 | Template | `[record]` and `[instance]` substituted into whatever you type |
 | Nothing | the device stores no patient ID |
@@ -148,6 +154,10 @@ device discloses something about eleven people that `USC01-0011` does not.
 
 Note that REDCap lets a project use anything as its record ID, including a
 surname or an MRN. If yours does, do not send it.
+
+`[record:5]` pads with leading zeros to at least five characters, so a column of
+these sorts. It never cuts a longer value down — shortening an identifier is how
+two participants come to share one.
 
 The device accepts printable ASCII except `,`, `<`, `&` and `>`, up to 64
 characters. The module composes the value, hands it to the SDK's
@@ -240,6 +250,43 @@ Severity is therefore contextual rather than lexical. The same alert text means:
 The alerts are **shown, not stored**. An alert needs the determination it sits on
 to mean anything, and a field holding one without that context asks a researcher
 to invent rules for reading it. The retained XML holds both properly.
+
+**By default a measurement that finished shows only its signal quality**, and the
+recovered attempt is not reported. That is a deliberate choice: a warning nobody
+can act on, in red, over a good reading, teaches an operator to ignore the panel
+-- and then the one that matters is ignored too. Motion during one attempt is the
+ordinary way to meet this.
+
+Every alert still reaches the console, and the retained XML holds all of them.
+Turn on **Show warnings from attempts the device recovered from** to see them on
+the page: a participant who needs three goes at every visit is worth knowing
+about.
+
+A measurement that **failed** shows everything, always. There, every alert is
+evidence.
+
+---
+
+## Testing without a device
+
+**TESTING ONLY -- simulated BP+** takes readings from the SDK's simulator instead
+of a cable, so the survey, the file storage, the record and the submit can all be
+exercised where there is no BP+ to hand -- which is most of what needs testing.
+
+Everything downstream of the device runs exactly as it does for real. That is the
+point, and it is also the danger, so a simulated reading is marked three times:
+
+- a red banner on the page, which is **its own element** rather than the status
+  line -- that gets rewritten by every step of every measurement, so a warning
+  put there is gone at the moment it matters;
+- a console warning;
+- **the device id in the record**, written as `SIMULATED-<id>`.
+
+The third is the one that counts. A fabricated reading that cannot be told apart
+in an export is the single thing this feature must not produce, and whoever reads
+that export later was not in the room.
+
+Never enable it on a project collecting real data.
 
 ---
 
