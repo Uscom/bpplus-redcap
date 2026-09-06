@@ -416,6 +416,34 @@ class BpPlusDataCapture extends AbstractExternalModule
         return trim((string) $this->getProjectSetting('patient-id-template'));
     }
 
+    /**
+     * The AOBP timings a project has configured, per body position.
+     *
+     * Passed through as typed, and checked in the browser against the SDK's own
+     * AobpLimits rather than against numbers repeated here. A limit written in
+     * two places is a limit that will disagree with itself.
+     *
+     * A blank setting stays blank all the way to the command, where the SDK
+     * omits the parameter and the device applies its own default -- 300/30/3
+     * seated, 60/30/2 standing. Substituting those numbers here would send
+     * seated timings to a standing measurement the moment somebody copied the
+     * wrong one.
+     */
+    private function aobpSettings(): array
+    {
+        $out = [];
+
+        foreach (['seated', 'standing'] as $position) {
+            $out[$position] = [
+                'initialDelaySeconds' => trim((string) $this->getProjectSetting("aobp-$position-initial-delay")),
+                'repeatDelaySeconds'  => trim((string) $this->getProjectSetting("aobp-$position-interval")),
+                'repeats'             => trim((string) $this->getProjectSetting("aobp-$position-repeats")),
+            ];
+        }
+
+        return $out;
+    }
+
     /** The MeasureMode the device must report, or null for "any". */
     private function requiredMode(): ?int
     {
@@ -465,6 +493,12 @@ class BpPlusDataCapture extends AbstractExternalModule
             // exactly as it does for real, which is the point and also the
             // danger -- see the banner and the device id in the page script.
             'simulator'             => (bool) $this->getProjectSetting('simulator'),
+
+            // Sent only when the device reports AOBP mode. A blank setting is
+            // omitted from the command rather than filled in here: the device's
+            // own defaults differ between the two positions, and only the
+            // device knows which applies.
+            'aobp'                  => $this->aobpSettings(),
         ];
 
         // json_encode with the HEX_* flags escapes everything that could close

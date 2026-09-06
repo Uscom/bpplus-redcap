@@ -63,6 +63,7 @@ which of these an administrator has to do and which a project owner can.
 | Set the device clock when it is out by more than *n* minutes | 5 | See **The device clock** |
 | Require the device to be in a particular measurement mode | any | Refuses to measure otherwise |
 | Refuse a measurement started on the device itself | off | See below |
+| AOBP timings, seated and standing | *(device default)* | See **AOBP** |
 | Show warnings from attempts the device recovered from | off | See **A warning on a measurement that worked** |
 | Log every serial line to the browser console | off | Troubleshooting only |
 | **TESTING ONLY** -- simulated BP+ | off | See **Testing without a device** |
@@ -106,6 +107,7 @@ rather than an edit to this module.
 | Augmentation index | `<p>ai` | `sAI`; legitimately negative in a young participant |
 | Signal-to-noise ratio | `<p>snr` | The raw dB, not its band label |
 | Irregular rhythm | `<p>irregular` | A radio, `1`/`0` |
+| Body position | `<p>position` | A radio, `seated`/`standing`. **The one field the operator fills** |
 | Measurement time | `<p>datetime` | The device clock, reformatted — see below |
 | Measurement GUID | `<p>guid` | |
 | Device ID | `<p>device_id` | Which physical device took the reading |
@@ -165,6 +167,45 @@ characters. The module composes the value, hands it to the SDK's
 still too long it sends **nothing** rather than a shortened version, because
 shortening an identifier is how two participants come to share one. The
 measurement goes ahead either way, and the status line says what happened.
+
+### AOBP
+
+When the BP+ is in **AOBP mode** the module sends the protocol's parameters with
+the start command. In every other mode it sends none of them: parameters six to
+eight are only valid alongside the fifth, and the device answers `F 14` to any
+of them on their own rather than ignoring them.
+
+**A body position is required, and refused rather than guessed.** `<p>position`
+is a radio on the instrument — the one field an operator fills. Press Measure
+without it in AOBP mode and the module says so and does nothing.
+
+That is deliberate. Sending no position does **not** fall back to seated the way
+the specification reads: the device starts immediately, takes three readings, and
+writes no position into the result — so afterwards nothing can say which posture
+was measured. A reading whose posture is unknown is not one this protocol can
+use.
+
+Each position has three settings, and each is blank by default:
+
+| | Range | Blank means |
+|---|---|---|
+| Rest before the first reading | 0–900 s | seated 300, standing 60 |
+| Interval between readings | 0–180 s | 30 |
+| Number of readings | 1–5 | seated 3, standing 2 |
+
+**Blank sends nothing**, and the *device* applies its own default. Those defaults
+differ between the positions, which is exactly why the module does not fill them
+in — a number substituted on the server would send seated timings to a standing
+measurement the first time somebody copied the wrong one.
+
+A value outside the range is **dropped, not sent**, with the reason in the
+console. The device rejects out-of-range values rather than clamping them, and it
+does so at the start of a measurement with a participant already sitting there —
+so a configuration mistake costs the setting, not the reading.
+
+The ranges come from the SDK's `AobpLimits`. They are not repeated here, because
+a limit written in two places is a limit that will eventually disagree with
+itself.
 
 ### The device clock
 

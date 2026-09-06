@@ -356,6 +356,13 @@ const settings = {
 
   detailedWarnings:  params.get('warnings') === '1',
   simulator:         params.get('simulated') === '1',
+
+  // ?position=seated|standing stands in for the radio the operator sets, and
+  // ?aobp=delay,interval,repeats for what a project configured. Both matter
+  // only when the simulator is put into AOBP mode with ?mode=aobp.
+  position:          params.get('position') || '',
+  aobpMode:          params.get('mode') === 'aobp',
+  aobpTimings:       (params.get('aobp') || '').split(','),
 };
 
 $('transport').value = settings.transport;
@@ -439,6 +446,7 @@ async function loadInstrument() {
 }
 
 const FIELD_SUFFIXES = [
+  'position',
   'sys', 'dia', 'map', 'hr', 'csys', 'cdia', 'ai', 'snr',
   'irregular', 'datetime', 'guid', 'device_id', 'status', 'xml', 'xml_text',
 ];
@@ -453,13 +461,18 @@ $('instrument').innerHTML = await loadInstrument();
   const holder = document.createElement('div');
   holder.hidden = true;
   holder.innerHTML = FIELD_SUFFIXES
-    .filter(s => s !== 'irregular')
+    .filter(s => s !== 'irregular' && s !== 'position')
     .map(s => `<input type="hidden" name="${fieldName(s)}" value="">`)
     .join('') +
     ['1', '0'].map(v =>
       `<label id="opt-${fieldName('irregular')}_${v}">
          <input type="radio" name="${fieldName('irregular')}" value="${v}">
-       </label>`).join('');
+       </label>`).join('') +
+    // The one field the OPERATOR sets. ?position= stands in for reaching over
+    // and clicking it, so the AOBP refusal can be exercised from a URL.
+    ['seated', 'standing'].map(v =>
+      `<input type="radio" name="${fieldName('position')}" value="${v}"` +
+      (settings.position === v ? ' checked' : '') + '>').join('');
   document.body.appendChild(holder);
 
   // REDCap records a radio only when the option is clicked, so the module clicks
@@ -476,7 +489,7 @@ function currentValues() {
   const out = {};
   for (const suffix of FIELD_SUFFIXES) {
     const name = fieldName(suffix);
-    if (suffix === 'irregular') {
+    if (suffix === 'irregular' || suffix === 'position') {
       const on = document.querySelector(`[name="${name}"]:checked`);
       out[name] = on ? on.value : '';
     } else {
@@ -536,6 +549,15 @@ window.BPPLUS_CONFIG = {
   // the part a project could get wrong.
   detailedWarnings: settings.detailedWarnings,
   simulator: settings.simulator,
+
+  aobp: {
+    seated:   { initialDelaySeconds: settings.aobpTimings[0] || '',
+                repeatDelaySeconds:  settings.aobpTimings[1] || '',
+                repeats:             settings.aobpTimings[2] || '' },
+    standing: { initialDelaySeconds: settings.aobpTimings[0] || '',
+                repeatDelaySeconds:  settings.aobpTimings[1] || '',
+                repeats:             settings.aobpTimings[2] || '' },
+  },
   // Passed explicitly for the same reason the server passes it: this page is not
   // in the same folder as the module's script, so a relative import would
   // resolve against the wrong directory.
@@ -569,7 +591,13 @@ window.BPPLUS_TRANSPORT = function (api, options) {
     // opposite direction. Refusing keeps Connect on screen, which is what an
     // operator actually sees at the start of a session.
     if (silent) throw new Error('the simulator has nothing to resume');
-    return new api.SimulatorTransport({ scenario: settings.scenario });
+
+    // ?mode=aobp puts the simulated device in AOBP mode, which is the only way
+    // to reach the body-position refusal and the timing parameters from here.
+    // The simulator defaults to plain BP+, where no AOBP block is sent at all.
+    return new api.SimulatorTransport(settings.aobpMode
+      ? { scenario: settings.scenario, measureMode: api.MeasureMode.bpPlusAobp }
+      : { scenario: settings.scenario });
   }
   const pick = api.recommendedTransport();
   if (pick.kind === api.TransportKind.usbSerial) return new api.UsbSerialTransport({ silent });

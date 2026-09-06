@@ -74,6 +74,19 @@ const FIELDS = [
   { name: 'intro', type: 'descriptive', label: controlMarkup(), note: '',
     section: 'BP+ measurement' },
 
+  // The one field on this instrument the OPERATOR fills. Everything else is
+  // written by the device, which is why every other note says so.
+  //
+  // Required when the BP+ is in AOBP mode: that protocol is defined for seated
+  // and standing and for nothing else, and the two have different device
+  // defaults for the delays and the number of readings. Sending no position at
+  // all does not fall back to seated the way the specification reads -- the
+  // firmware starts immediately, takes three readings, and writes no position
+  // into the result, so nothing afterwards can say which posture was measured.
+  { name: 'position', type: 'radio', label: 'Body position',
+    choices: 'seated, Seated | standing, Standing',
+    note: 'Set this before measuring. Required when the BP+ is in AOBP mode, because the protocol is defined for these two positions and the device times them differently.' },
+
   { name: 'sys', label: 'Brachial systolic (mmHg)', validation: 'integer', min: 40, max: 300,
     section: 'Brachial pressures' },
   { name: 'dia', label: 'Brachial diastolic (mmHg)', validation: 'integer', min: 20, max: 200 },

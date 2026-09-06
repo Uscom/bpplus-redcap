@@ -143,6 +143,8 @@ const PREFIX = 'bpplus_';
 // the point is to fail when js/bpplus-capture.js changes its mind without the
 // instrument being changed to match.
 const EXPECTED_FIELDS = [
+  // position is the one the OPERATOR fills; the rest the device writes.
+  'position',
   'sys', 'dia', 'map', 'hr',
   'csys', 'cdia', 'ai', 'snr',
   'irregular', 'datetime', 'guid', 'device_id',
@@ -158,7 +160,7 @@ if (!JSDOM) {
   // Every element the module looks for, and one input per field, so the
   // stand-in is what the real instrument has to be.
   const inputs = EXPECTED_FIELDS
-    .filter(name => name !== PREFIX + 'irregular')
+    .filter(name => name !== PREFIX + 'irregular' && name !== PREFIX + 'position')
     .map(name => `<input type="hidden" name="${name}" value="">`)
     .join('');
 
@@ -174,6 +176,8 @@ if (!JSDOM) {
     ${inputs}
     <div id="opt-${PREFIX}irregular_1"></div>
     <div id="opt-${PREFIX}irregular_0"></div>
+    <input type="radio" name="${PREFIX}position" value="seated">
+    <input type="radio" name="${PREFIX}position" value="standing">
   </body></html>`;
 
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
@@ -475,6 +479,66 @@ console.log('\nthe patient ID is composed from the SDK rule');
     module.includes('(?::(\\d+))?'));
   check('and it pads rather than truncates',
     /while \(value\.length < pad\)/.test(module) && !/\.slice\(0, pad\)/.test(module));
+}
+
+// -- Is the AOBP protocol driven, or left to chance? ---------------------------
+// AOBP is defined for seated and standing and for nothing else, and the two are
+// timed differently. Sending no position does not fall back to seated the way
+// the specification reads: the device starts immediately, takes three readings,
+// and writes no position into the result -- so afterwards nothing can say which
+// posture was measured.
+
+console.log('\nan AOBP measurement knows which posture it is');
+
+{
+  const module = fs.readFileSync(
+    new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+  const config = JSON.parse(fs.readFileSync(
+    new URL('../config.json', import.meta.url), 'utf8'));
+
+  check('the position comes from the form, not a setting',
+    /function bodyPosition\(/.test(module) && /:checked/.test(module));
+
+  check('and a measurement without one is refused in AOBP mode',
+    /deviceIsAobp\(\) && !position/.test(module) && /return false;/.test(module));
+
+  // The mode is the device's own answer, not what a project asked for: a
+  // project can require a mode and cannot make the device be in it.
+  check('AOBP mode is read from the feature list',
+    /features\.measureMode/.test(module) && /MeasureMode\.bpPlusAobp/.test(module));
+
+  // The block is only valid alongside a body position; the device answers F 14
+  // to the timing parameters on their own.
+  check('no AOBP block is sent in any other mode',
+    /if \(!position \|\| !deviceIsAobp\(\)\) return null;/.test(module));
+
+  for (const position of ['seated', 'standing']) {
+    for (const what of ['initial-delay', 'interval', 'repeats']) {
+      const key = `aobp-${position}-${what}`;
+      check(`${key} is a project setting`,
+        config['project-settings'].some(s => s.key === key));
+    }
+  }
+
+  // A blank setting must reach the command blank, so the SDK omits the
+  // parameter and the DEVICE applies its default. The two positions default
+  // differently -- 300/30/3 seated, 60/30/2 standing -- so filling one in on
+  // the server would send the wrong protocol to the other position.
+  const php = fs.readFileSync(
+    new URL('../BpPlusDataCapture.php', import.meta.url), 'utf8');
+  check('a blank setting is passed through, not filled in',
+    /function aobpSettings/.test(php) && !/300|60, 30/.test(php.slice(php.indexOf('function aobpSettings'), php.indexOf('function aobpSettings') + 900)));
+
+  // The limits belong to the SDK. Repeated here they would eventually disagree.
+  check('the ranges are checked against the SDK, not against numbers repeated here',
+    /sdk\.AobpLimits/.test(module) && !/900|180/.test(
+      module.slice(module.indexOf('function aobpOptions'),
+                   module.indexOf('function aobpOptions') + 1800)));
+
+  // Out of range costs the setting, not the reading: the device rejects rather
+  // than clamps, and it does so with a participant already sitting there.
+  check('an out-of-range setting is dropped rather than sent',
+    /was not sent, so the device uses its own default/.test(module));
 }
 
 // -- The controls, and the ones that are not there ----------------------------

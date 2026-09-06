@@ -341,6 +341,70 @@
     }
 
     /**
+     * Whether the BP+ is in the mode the AOBP protocol needs.
+     *
+     * Read from the feature list, which is the device's own answer, not from a
+     * setting: a project can require a mode but cannot make the device be in it.
+     */
+    function deviceIsAobp() {
+      return !!(sdk && features && features.measureMode !== null &&
+                Number(features.measureMode) === sdk.MeasureMode.bpPlusAobp);
+    }
+
+    /** Seated or standing, as the operator set it on the form. */
+    function bodyPosition() {
+      var chosen = document.querySelector('[name="' + fields.position + '"]:checked');
+      var value = chosen ? String(chosen.value) : '';
+      return (value === 'seated' || value === 'standing') ? value : '';
+    }
+
+    /**
+     * The AOBP block for the start command, or null when it does not apply.
+     *
+     * Null in every mode but AOBP: the sixth to eighth parameters are only
+     * valid with the fifth, and the device answers F 14 to any of them on their
+     * own rather than ignoring them.
+     *
+     * A setting left blank is passed through blank, so the SDK omits that
+     * parameter and the device applies its own default. The two positions have
+     * different defaults -- 300/30/3 seated, 60/30/2 standing -- so filling one
+     * in here would send the wrong protocol to the other position.
+     *
+     * A value outside the SDK's declared limits is dropped rather than sent.
+     * The device rejects out-of-range values instead of clamping them, and it
+     * does so at the start of a measurement, with a participant sitting there;
+     * a configuration mistake should cost the setting, not the reading.
+     */
+    function aobpOptions(position) {
+      if (!position || !deviceIsAobp()) return null;
+
+      var configured = (config().aobp || {})[position] || {};
+      var limits = (sdk && sdk.AobpLimits) || {};
+      var options = { bodyPosition: position };
+
+      ['initialDelaySeconds', 'repeatDelaySeconds', 'repeats'].forEach(function (key) {
+        var raw = String(configured[key] === undefined || configured[key] === null
+          ? '' : configured[key]).trim();
+        if (raw === '') return;                 // the device's own default
+
+        var value = Number(raw);
+        var range = limits[key];
+
+        if (!isFinite(value) || Math.floor(value) !== value ||
+            (range && (value < range.min || value > range.max))) {
+          console.warn('[BP+] the ' + position + ' AOBP setting ' + key + ' is "' + raw +
+                       '"' + (range ? ', and the device takes ' + range.min + ' to ' + range.max : '') +
+                       '. It was not sent, so the device uses its own default.');
+          return;
+        }
+
+        options[key] = value;
+      });
+
+      return options;
+    }
+
+    /**
      * What to send the device as the patient ID, and why it might be nothing.
      *
      * The device writes this verbatim into its own result file and keeps it on
@@ -695,6 +759,21 @@
       showAlerts([], null, false);
       setStatus('normal', 'Measuring — keep the arm still and do not talk.');
 
+      // The AOBP protocol is defined for seated and standing and for nothing
+      // else, and the two are timed differently. Refused rather than guessed:
+      // sending no position does not fall back to seated the way the
+      // specification reads -- the device starts immediately, takes three
+      // readings, and writes no position into the result, so afterwards nothing
+      // can say which posture was measured. A reading whose posture is unknown
+      // is not a reading this protocol can use.
+      var position = bodyPosition();
+      if (deviceIsAobp() && !position) {
+        setStatus('error', 'This BP+ is in AOBP mode, which measures seated and ' +
+          'standing differently. Choose the body position on the form, then press ' +
+          'Measure.');
+        return false;
+      }
+
       // Worked out before the measurement so a problem with it is reported
       // with the result rather than lost behind "Measuring". A patient ID that
       // cannot be composed is not a reason to refuse a participant who is
@@ -709,7 +788,13 @@
       updateButtons();
       try {
         await syncClock();
-        measurement = await device.measure({ patientId: who.value });
+        // aobp is null in every other mode: the sixth to eighth parameters are
+        // only valid with the fifth, and the device answers F 14 to any of them
+        // on their own rather than ignoring them.
+        measurement = await device.measure({
+          patientId: who.value,
+          aobp: aobpOptions(position),
+        });
       } catch (error) {
         setStatus('error', describe(error));
         showAlerts(error.alerts, null, false);
@@ -1393,6 +1478,7 @@
       datetime:  prefix + 'datetime',
       guid:      prefix + 'guid',
       device_id: prefix + 'device_id',
+      position:  prefix + 'position',
       status:    prefix + 'status',
       xml:       prefix + 'xml',
       xml_text:  prefix + 'xml_text',

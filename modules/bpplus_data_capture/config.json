@@ -2,7 +2,7 @@
   "name": "BP+ Data Capture",
   "namespace": "Uscom\\BpPlusDataCapture",
   "description": "Records a blood-pressure measurement from a Uscom BP+ device directly into a REDCap instrument, and keeps the device's own result XML as a file on the record. An example module, meant to be copied and edited.",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "documentation": "README.md",
   "authors": [
     {
@@ -11,27 +11,25 @@
       "institution": "Uscom Ltd"
     }
   ],
-
   "framework-version": 15,
-
   "compatibility": {
     "php-version-min": "8.0.0",
     "redcap-version-min": "13.1.0"
   },
-
   "permissions": [],
-
   "$comment-ajax": [
     "An ajax action must be declared for the context it is called from, and a",
     "survey respondent is not logged in -- so save-xml is in both lists.",
     "Undeclared, the framework refuses the call and the recording is silently",
     "never filed."
   ],
-  "no-auth-ajax-actions": ["save-xml"],
-  "auth-ajax-actions": ["save-xml"],
-
+  "no-auth-ajax-actions": [
+    "save-xml"
+  ],
+  "auth-ajax-actions": [
+    "save-xml"
+  ],
   "enable-every-page-hooks-on-system-pages": false,
-
   "project-settings": [
     {
       "key": "capture-instrument",
@@ -56,10 +54,22 @@
       "type": "dropdown",
       "required": false,
       "choices": [
-        { "value": "",         "name": "REDCAP-[record]-[instance] (default)" },
-        { "value": "record",   "name": "The record ID on its own" },
-        { "value": "template", "name": "The template below" },
-        { "value": "off",      "name": "Nothing -- the device stores no patient ID" }
+        {
+          "value": "",
+          "name": "REDCAP-[record]-[instance] (default)"
+        },
+        {
+          "value": "record",
+          "name": "The record ID on its own"
+        },
+        {
+          "value": "template",
+          "name": "The template below"
+        },
+        {
+          "value": "off",
+          "name": "Nothing -- the device stores no patient ID"
+        }
       ]
     },
     {
@@ -86,15 +96,112 @@
       "type": "dropdown",
       "required": false,
       "choices": [
-        { "value": "",  "name": "Any mode" },
-        { "value": "1", "name": "BP+ (suprasystolic, single measurement)" },
-        { "value": "5", "name": "BP+ AOBP (averaged, unattended)" }
+        {
+          "value": "",
+          "name": "Any mode"
+        },
+        {
+          "value": "1",
+          "name": "BP+ (suprasystolic, single measurement)"
+        },
+        {
+          "value": "5",
+          "name": "BP+ AOBP (averaged, unattended)"
+        }
       ]
     },
     {
       "key": "host-started-only",
       "name": "<b>Refuse a measurement started on the device itself</b><br>A measurement begun with the BP+'s own Start button carries no patient ID and belongs to no record. On, the module cancels it and says so.",
       "type": "checkbox"
+    },
+    {
+      "key": "aobp-seated-initial-delay",
+      "name": "<b>AOBP &mdash; Seated: rest before the first reading (seconds)</b><br>0 to 900. Blank sends nothing and the device uses its own default (seated uses 300 s, 30 s, 3 for the three settings). Only used when the BP+ reports AOBP mode.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "aobp-seated-interval",
+      "name": "<b>AOBP &mdash; Seated: interval between readings (seconds)</b><br>0 to 180. Blank sends nothing and the device uses its own default.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "aobp-seated-repeats",
+      "name": "<b>AOBP &mdash; Seated: number of readings</b><br>Blank sends nothing and the device uses its own default.",
+      "type": "dropdown",
+      "required": false,
+      "choices": [
+        {
+          "value": "",
+          "name": "(device default)"
+        },
+        {
+          "value": "1",
+          "name": "1"
+        },
+        {
+          "value": "2",
+          "name": "2"
+        },
+        {
+          "value": "3",
+          "name": "3"
+        },
+        {
+          "value": "4",
+          "name": "4"
+        },
+        {
+          "value": "5",
+          "name": "5"
+        }
+      ]
+    },
+    {
+      "key": "aobp-standing-initial-delay",
+      "name": "<b>AOBP &mdash; Standing: rest before the first reading (seconds)</b><br>0 to 900. Blank sends nothing and the device uses its own default (standing uses 60 s, 30 s, 2 for the three settings). Only used when the BP+ reports AOBP mode.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "aobp-standing-interval",
+      "name": "<b>AOBP &mdash; Standing: interval between readings (seconds)</b><br>0 to 180. Blank sends nothing and the device uses its own default.",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "aobp-standing-repeats",
+      "name": "<b>AOBP &mdash; Standing: number of readings</b><br>Blank sends nothing and the device uses its own default.",
+      "type": "dropdown",
+      "required": false,
+      "choices": [
+        {
+          "value": "",
+          "name": "(device default)"
+        },
+        {
+          "value": "1",
+          "name": "1"
+        },
+        {
+          "value": "2",
+          "name": "2"
+        },
+        {
+          "value": "3",
+          "name": "3"
+        },
+        {
+          "value": "4",
+          "name": "4"
+        },
+        {
+          "value": "5",
+          "name": "5"
+        }
+      ]
     },
     {
       "key": "show-recovered-warnings",
