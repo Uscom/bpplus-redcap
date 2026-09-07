@@ -501,6 +501,54 @@ console.log('\nan AOBP measurement knows which posture it is');
   check('and a measurement without one is refused in AOBP mode',
     /deviceIsAobp\(\) && !position/.test(module) && /return false;/.test(module));
 
+  // A refusal has to give the port back.
+  //
+  // Refusing a device for its measurement mode left the transport orphaned
+  // still holding the port, reader and writer locks with it. The next Connect
+  // got the same SerialPort from the picker, open() answered "The port is
+  // already open", and the SDK's retry could not close it because the locks
+  // belonged to a transport nobody had a reference to. Unplugging the cable was
+  // the only way out — after a refusal that is not a fault at all, and that the
+  // operator was expected to act on and try again.
+  if (JSDOM) {
+    const sdkUrl = new URL('../sdk/index.js', import.meta.url).href;
+    const w = new JSDOM(`<!doctype html><html><body>
+      <button id="bpplus-connect"></button><button id="bpplus-measure"></button>
+      <div id="bpplus-status"></div><div id="bpplus-results"></div>
+    </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true }).window;
+
+    globalThis.DOMParser = w.DOMParser;
+    globalThis.XMLSerializer = w.XMLSerializer;
+    Object.defineProperty(w, 'crypto', { value: globalThis.crypto, configurable: true });
+    w.TextEncoder = TextEncoder;
+
+    let opened = 0, closed = 0;
+    // Require AOBP; the simulator reports plain BP+, so this is the refusal.
+    w.BPPLUS_CONFIG = { record: 'R1', sdkUrl, requiredMode: 5 };
+    w.BPPLUS_TRANSPORT = function (api) {
+      const t = new api.SimulatorTransport({ tickMs: 2 });
+      const open = t.open.bind(t), close = t.close.bind(t);
+      t.open  = function (...a) { opened++; return open(...a); };
+      t.close = function (...a) { closed++; return close(...a); };
+      return t;
+    };
+    w.console.log = () => {}; w.console.warn = () => {}; w.console.error = () => {};
+
+    w.eval(fs.readFileSync(new URL('../js/bpplus-capture.js', import.meta.url), 'utf8'));
+    w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    let refusal = null;
+    try { await w.BPPLUS.connect(); } catch (error) { refusal = error; }
+    await new Promise(resolve => setTimeout(resolve, 400));
+
+    check('a device in the wrong mode is refused',
+      /This BP\+ is in .* mode/.test(refusal?.message || ''), String(refusal?.message));
+    check('and every port it opened was given back',
+      opened > 0 && closed === opened,
+      'opened ' + opened + ', closed ' + closed);
+  }
+
   // Every value the dropdown offers has to BE a MeasureMode. It offered 1 for
   // "BP+", and 1 is bpOnly — so a project configured for BP+ refused a BP+ with
   // "This BP+ is in BP+ mode. This project needs Only BP.", which reads like a

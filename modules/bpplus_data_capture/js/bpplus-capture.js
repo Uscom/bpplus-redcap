@@ -201,6 +201,41 @@
 
       await device.connect();
 
+      // Everything from here can fail, and the port is open by now. A failure
+      // has to give it back.
+      //
+      // Without this the transport was orphaned still holding the port, its
+      // reader and writer locks with it: the next Connect got the same
+      // SerialPort from the picker, open() answered "The port is already open",
+      // and the SDK's retry could not close it because the locks belonged to a
+      // transport nobody had a reference to any more. Unplugging the cable was
+      // the only way out. Reached most easily by refusing a device for its
+      // measurement mode, which is a refusal, not a fault — and left the
+      // operator unable to try again after changing the mode.
+      try {
+        await verify();
+      } catch (error) {
+        // Bounded, and the result ignored. The operator is owed the reason this
+        // failed; giving the port back matters, but not enough to wait on.
+        await Promise.race([
+          device.disconnect().catch(function () { /* already gone */ }),
+          new Promise(function (resolve) { setTimeout(resolve, 4000); }),
+        ]);
+
+        device = null;
+        features = null;
+        throw error;
+      }
+    }
+
+    /**
+     * Ask the open port whether it is a BP+ this project can use.
+     *
+     * Split from connect() so the failure has one place to be handled, and
+     * because opening a port and approving what is on the end of it are
+     * different questions with different answers.
+     */
+    async function verify() {
       // device.connect() only opens the port — it sends nothing and waits for
       // nothing. The feature list is the first thing the device actually says,
       // so it is what proves a BP+ is on the other end at all.
