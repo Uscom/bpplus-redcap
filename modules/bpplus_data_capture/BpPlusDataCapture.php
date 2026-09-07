@@ -481,7 +481,12 @@ class BpPlusDataCapture extends AbstractExternalModule
             'saveXmlAsFile'         => (bool) $this->getProjectSetting('save-xml-file'),
             'clockToleranceMinutes' => $this->clockToleranceMinutes(),
             'requiredMode'          => $this->requiredMode(),
-            'hostStartedOnly'       => (bool) $this->getProjectSetting('host-started-only'),
+            // Inverted, because a checkbox is false when absent and this is the
+            // setting whose safe position must be the one a new project starts
+            // in. A measurement started on the device carries no patient ID and
+            // never reaches REDCap, so refusing it is the default and allowing
+            // it is the deliberate act.
+            'hostStartedOnly'       => !$this->getProjectSetting('allow-device-started'),
             'trace'                 => (bool) $this->getProjectSetting('trace'),
 
             // The device retries a determination it could not measure and still

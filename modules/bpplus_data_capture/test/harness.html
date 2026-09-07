@@ -447,8 +447,9 @@ async function loadInstrument() {
 
 const FIELD_SUFFIXES = [
   'position',
-  'sys', 'dia', 'map', 'hr', 'csys', 'cdia', 'ai', 'snr',
-  'irregular', 'datetime', 'guid', 'device_id', 'status', 'xml', 'xml_text',
+  'sys', 'dia', 'map', 'pr', 'csys', 'cdia', 'cmap', 'sai', 'snr',
+  'sprv', 'spr', 'sppv', 'ssep',
+  'datetime', 'guid', 'device_id', 'status', 'xml', 'xml_text',
 ];
 const fieldName = suffix => settings.prefix + suffix;
 
@@ -461,26 +462,15 @@ $('instrument').innerHTML = await loadInstrument();
   const holder = document.createElement('div');
   holder.hidden = true;
   holder.innerHTML = FIELD_SUFFIXES
-    .filter(s => s !== 'irregular' && s !== 'position')
+    .filter(s => s !== 'position')
     .map(s => `<input type="hidden" name="${fieldName(s)}" value="">`)
     .join('') +
-    ['1', '0'].map(v =>
-      `<label id="opt-${fieldName('irregular')}_${v}">
-         <input type="radio" name="${fieldName('irregular')}" value="${v}">
-       </label>`).join('') +
     // The one field the OPERATOR sets. ?position= stands in for reaching over
     // and clicking it, so the AOBP refusal can be exercised from a URL.
     ['seated', 'standing'].map(v =>
       `<input type="radio" name="${fieldName('position')}" value="${v}"` +
       (settings.position === v ? ' checked' : '') + '>').join('');
   document.body.appendChild(holder);
-
-  // REDCap records a radio only when the option is clicked, so the module clicks
-  // it. Here the label has to pass that on to the input it wraps.
-  for (const v of ['1', '0']) {
-    document.getElementById(`opt-${fieldName('irregular')}_${v}`)
-      .addEventListener('click', function () { this.querySelector('input').checked = true; renderFields(); });
-  }
 }
 
 // -- The record, as the module leaves it --------------------------------------
@@ -489,7 +479,7 @@ function currentValues() {
   const out = {};
   for (const suffix of FIELD_SUFFIXES) {
     const name = fieldName(suffix);
-    if (suffix === 'irregular' || suffix === 'position') {
+    if (suffix === 'position') {
       const on = document.querySelector(`[name="${name}"]:checked`);
       out[name] = on ? on.value : '';
     } else {
@@ -913,13 +903,16 @@ function runChecks(m) {
       `device ${m.timestamp}, field "${stored}"`);
   }
 
+  // The measured number reaches the field unchanged. Nothing here judges it:
+  // whether a rhythm counts as irregular is a screening question with a
+  // threshold in it, and this module does not answer it.
   const rhythm = m.rhythm;
   if (rhythm.known) {
-    check(values[fieldName('irregular')] === (rhythm.irregular ? '1' : '0'),
-      'the irregular-rhythm radio matches sPRV',
-      `sPRV ${rhythm.sPRV} ms, field "${values[fieldName('irregular')]}"`);
+    check(values[fieldName('sprv')] === String(rhythm.sPRV),
+      'the pulse-rate variability reached the field intact',
+      `device ${rhythm.sPRV} ms, field "${values[fieldName('sprv')]}"`);
   } else {
-    out.push({ skip: true, name: 'irregular rhythm: the device did not report sPRV' });
+    out.push({ skip: true, name: 'pulse-rate variability: the device did not report sPRV' });
   }
 
   check(values[fieldName('status')] === 'complete', 'the capture status was set');

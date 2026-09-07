@@ -145,9 +145,10 @@ const PREFIX = 'bpplus_';
 const EXPECTED_FIELDS = [
   // position is the one the OPERATOR fills; the rest the device writes.
   'position',
-  'sys', 'dia', 'map', 'hr',
-  'csys', 'cdia', 'ai', 'snr',
-  'irregular', 'datetime', 'guid', 'device_id',
+  'sys', 'dia', 'map', 'pr',
+  'csys', 'cdia', 'cmap', 'sai', 'snr',
+  'sprv', 'spr', 'sppv', 'ssep',
+  'datetime', 'guid', 'device_id',
   'status', 'xml', 'xml_text',
 ].map(suffix => PREFIX + suffix);
 
@@ -160,7 +161,7 @@ if (!JSDOM) {
   // Every element the module looks for, and one input per field, so the
   // stand-in is what the real instrument has to be.
   const inputs = EXPECTED_FIELDS
-    .filter(name => name !== PREFIX + 'irregular' && name !== PREFIX + 'position')
+    .filter(name => name !== PREFIX + 'position')
     .map(name => `<input type="hidden" name="${name}" value="">`)
     .join('');
 
@@ -174,8 +175,6 @@ if (!JSDOM) {
     <div id="bpplus-alerts"></div>
     <div id="bpplus-device-info"></div>
     ${inputs}
-    <div id="opt-${PREFIX}irregular_1"></div>
-    <div id="opt-${PREFIX}irregular_0"></div>
     <input type="radio" name="${PREFIX}position" value="seated">
     <input type="radio" name="${PREFIX}position" value="standing">
   </body></html>`;
@@ -645,6 +644,59 @@ console.log('\na recovered retry is not an error');
 
   check('the harness fetches the instrument past the cache',
     /cache:\s*'no-store'/.test(harness));
+}
+
+
+// -- Will the settings reach an administrator as written? ----------------------
+// REDCap renders each setting's `name` from config.json as HTML. The failure is
+// silent: a default written as REDCAP-<record>-<instance> reaches the settings
+// page as "REDCAP--", because the browser reads the angle brackets as tags and
+// drops them along with what they appear to wrap.
+
+console.log('\nthe settings say what they mean');
+
+{
+  const config = JSON.parse(fs.readFileSync(new URL('../config.json', import.meta.url), 'utf8'));
+  const settings = [...(config['project-settings'] || []), ...(config['system-settings'] || [])];
+
+  // The tags REDCap's own setting names use. Anything else between angle
+  // brackets is markup a browser will swallow.
+  const KNOWN = /^<\/?(b|i|em|strong|code|br|u|small)\s*\/?>$/i;
+
+  const swallowed = [];
+  const unheaded = [];
+  const thin = [];
+  const emptyDropdowns = [];
+
+  for (const setting of settings) {
+    const name = String(setting.name || '');
+
+    for (const tag of name.match(/<[^>]*>/g) || []) {
+      if (!KNOWN.test(tag)) swallowed.push(setting.key + ': ' + tag);
+    }
+    if (!/^<b>.*<\/b>/.test(name)) unheaded.push(setting.key);
+
+    const after = name.split('<br>').slice(1).join(' ').replace(/<[^>]+>/g, '').trim();
+    if (!name.includes('<br>') || after.length < 25) thin.push(setting.key);
+
+    if (setting.type === 'dropdown' && !(setting.choices || []).length) {
+      emptyDropdowns.push(setting.key);
+    }
+  }
+
+  check('no setting name contains markup a browser will swallow',
+    swallowed.length === 0, swallowed.join('; '));
+  check('every setting leads with a bold heading',
+    unheaded.length === 0, unheaded.join(', '));
+  check('and follows it with an explanation',
+    thin.length === 0, thin.join(', '));
+  check('no dropdown is offered without choices',
+    emptyDropdowns.length === 0, emptyDropdowns.join(', '));
+
+  // The page that shows the same thing to a human, since wording is not
+  // something a regular expression can judge.
+  check('the settings preview page is present',
+    fs.existsSync(new URL('../test/settings.html', import.meta.url)));
 }
 
 // -- Is a result a reading? ---------------------------------------------------

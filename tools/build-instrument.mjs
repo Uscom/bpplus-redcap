@@ -66,9 +66,22 @@ function controlMarkup() {
  * says so: an operator who types over one is not doing anything REDCap will
  * stop, and the next measurement overwrites it without comment.
  *
- * The validation ranges are the device's declared measurement limits, not
- * clinical ones. A range narrower than what the device can produce turns a real
- * reading into a REDCap error the operator has no way to resolve.
+ * The validation ranges are the RATED range for each measure, taken from
+ * bpplus-measures-kb (D:\BPplus\Specifications\BPplus\bpplus-measures-kb,
+ * one file per measure). That is the range the device is validated over, and
+ * MeasurementRanges.md in the 1kb knowledge base says it is the one that
+ * governs display -- not the wider measurement range the sensor can reach, and
+ * not a clinical or normal range.
+ *
+ * They are not clinical limits and must not be narrowed to look sensible. A
+ * range tighter than what the device can produce makes REDCap query a real
+ * reading, and the operator has nothing to correct.
+ *
+ * The central pressures are the brachial ones widened by 3 mmHg at each end,
+ * which is what the knowledge base records rather than anything derived here.
+ *
+ * Several are marked provisional there, from a draft RS:CALCS revision. Re-check
+ * them against the knowledge base when @p is released.
  */
 const FIELDS = [
   { name: 'intro', type: 'descriptive', label: controlMarkup(), note: '',
@@ -87,24 +100,39 @@ const FIELDS = [
     choices: 'seated, Seated | standing, Standing',
     note: 'Set this before measuring. Required when the BP+ is in AOBP mode, because the protocol is defined for these two positions and the device times them differently.' },
 
-  { name: 'sys', label: 'Brachial systolic (mmHg)', validation: 'integer', min: 40, max: 300,
+  { name: 'sys', label: 'Brachial systolic (mmHg)', validation: 'integer', min: 40, max: 280,
     section: 'Brachial pressures' },
   { name: 'dia', label: 'Brachial diastolic (mmHg)', validation: 'integer', min: 20, max: 200 },
-  { name: 'map', label: 'Brachial mean arterial pressure (mmHg)', validation: 'integer', min: 25, max: 250 },
-  { name: 'hr', label: 'Pulse rate (bpm)', validation: 'integer', min: 30, max: 240 },
+  { name: 'map', label: 'Brachial mean arterial pressure (mmHg)', validation: 'integer', min: 25, max: 245 },
+  { name: 'pr', label: 'Pulse rate (bpm)', validation: 'integer', min: 30, max: 240 },
 
-  { name: 'csys', label: 'Central systolic (mmHg)', validation: 'integer', min: 40, max: 300,
+  { name: 'csys', label: 'Central systolic (mmHg)', validation: 'integer', min: 37, max: 283,
     section: 'Central pressures and indices',
     note: 'Derived by the BP+ from the suprasystolic capture. Filled by the device -- do not type over it.' },
-  { name: 'cdia', label: 'Central diastolic (mmHg)', validation: 'integer', min: 20, max: 200 },
-  { name: 'ai', label: 'Augmentation index (%)', validation: 'number', min: -50, max: 100,
-    note: 'sAI. Can legitimately be negative in a young participant.' },
-  { name: 'snr', label: 'Signal-to-noise ratio (dB)', validation: 'number',
+  { name: 'cdia', label: 'Central diastolic (mmHg)', validation: 'integer', min: 17, max: 203 },
+  { name: 'cmap', label: 'Central mean arterial pressure (mmHg)', validation: 'integer', min: 22, max: 248,
+    note: 'cMap. Derived by the BP+ from the suprasystolic capture, like the two above.' },
+  { name: 'sai', label: 'Suprasystolic augmentation index (%)', validation: 'number', min: 0, max: 500,
+    note: 'sAI. A ratio against the incident wave amplitude, not against pulse pressure, so it is always positive and has no ceiling at 100 -- a small incident wave sends it up without limit. sAIx is the one that can be negative; this is not it.' },
+  { name: 'snr', label: 'Signal-to-noise ratio (dB)', validation: 'number', min: 0, max: 100,
     note: 'The raw number, not its quality band. A band that moved later would leave a stored label wrong with nothing to check it against.' },
 
-  { name: 'irregular', type: 'radio', label: 'Irregular rhythm detected',
-    choices: '1, Yes | 0, No',
-    note: 'From the pulse-rate variability measured during the suprasystolic capture. Left blank when the device did not report it.' },
+  // The measured number, not a judgement about it. Whether a rhythm counts as
+  // irregular is a screening question with a threshold in it, and a threshold
+  // that moved later would leave a stored yes/no wrong with nothing to check it
+  // against -- the same reason snr is stored raw rather than as its band.
+  //
+  // No range: the device declares none for sPRV, and a range narrower than what
+  // it can produce turns a real reading into a REDCap error the operator cannot
+  // resolve.
+  { name: 'sprv', label: 'Suprasystolic pulse-rate variability (ms)', validation: 'number', min: 0, max: 2000,
+    note: 'sPRV: the RMSSD of the beat intervals during the suprasystolic capture. Left blank when the device did not report it.' },
+  { name: 'spr', label: 'Suprasystolic pulse rate (bpm)', validation: 'integer', min: 30, max: 240,
+    note: 'sPR: the pulse rate measured during the suprasystolic capture. Not the same field as bpplus_pr, which is the rate from the cuff determination.' },
+  { name: 'sppv', label: 'Suprasystolic pulse pressure variation (%)', validation: 'number', min: 0, max: 100,
+    note: 'sPPV.' },
+  { name: 'ssep', label: 'Systolic ejection period (ms)', validation: 'number', min: 50, max: 1000,
+    note: 'sSEP, measured during the suprasystolic capture.' },
 
   { name: 'datetime', label: 'Measurement time (device clock)', validation: 'datetime_seconds_ymd',
     section: 'Provenance -- written by the device, not by the operator',

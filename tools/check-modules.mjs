@@ -264,6 +264,24 @@ for (const name of modules) {
         + `Write \\${u.name}, or import it with "use ${u.name};".`).join('\n        '));
   }
 
+  // config.json is what an administrator reads on the settings page, and a
+  // character outside ASCII survives or does not depending on how REDCap reads
+  // the file, what the page declares, and what the browser guesses. A curly
+  // apostrophe is the usual one: it arrives by paste, looks identical in an
+  // editor, and is invisible in a diff.
+  //
+  // The data dictionary generator already refuses these for the same reason.
+  // This is the same rule for the other file a person reads.
+  {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const offenders = [...new Set([...raw].filter(ch => ch.charCodeAt(0) > 126))];
+
+    check('config.json is plain ASCII', offenders.length === 0,
+      offenders.map(ch =>
+        `${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')})`
+      ).join(', ') + ' -- use the ASCII equivalent, or an HTML entity such as &mdash;');
+  }
+
   // The documentation key is how REDCap's module list offers a README. A key
   // pointing at a file that is not there is a dead link on every installation.
   if (config.documentation) {

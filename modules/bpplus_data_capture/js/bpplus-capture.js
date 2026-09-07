@@ -27,10 +27,10 @@
  * and the fields it fills, all built from the project's prefix (`bpplus_` by
  * default) so that renaming them is a setting rather than an edit:
  *
- *   <p>sys <p>dia <p>map <p>hr        brachial pressures and pulse rate
- *   <p>csys <p>cdia                   central pressures — what a BP+ is for
- *   <p>ai <p>snr                      augmentation index, signal-to-noise ratio
- *   <p>irregular                      radio: irregular rhythm, 1/0
+ *   <p>sys <p>dia <p>map <p>pr        brachial pressures and pulse rate
+ *   <p>csys <p>cdia <p>cmap           central pressures — what a BP+ is for
+ *   <p>sai <p>snr                      augmentation index, signal-to-noise ratio
+ *   <p>sprv <p>spr <p>sppv <p>ssep    suprasystolic indices
  *   <p>datetime <p>guid <p>device_id  provenance, from the device
  *   <p>status                         set to `complete` when a reading is stored
  *   <p>xml                            File Upload; filed by the server, and its
@@ -157,21 +157,6 @@
       field.value = value === null || value === undefined ? '' : String(value);
       field.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
-    }
-
-    /**
-     * REDCap renders a radio as a set of buttons, and only a click on the right
-     * one records the choice — setting .value on the group does nothing.
-     */
-    function setRadio(name, value) {
-      var button = document.getElementById('opt-' + name + '_' + value);
-      if (button) { button.click(); return true; }
-
-      var input = document.querySelector('[name="' + name + '"][value="' + value + '"]');
-      if (input) { input.click(); return true; }
-
-      console.warn('[BP+] could not set radio', name, '=', value);
-      return false;
     }
 
     // -- The device ----------------------------------------------------------
@@ -371,9 +356,17 @@
      * in here would send the wrong protocol to the other position.
      *
      * A value outside the SDK's declared limits is dropped rather than sent.
-     * The device rejects out-of-range values instead of clamping them, and it
-     * does so at the start of a measurement, with a participant sitting there;
-     * a configuration mistake should cost the setting, not the reading.
+     * The settings are dropdowns, so nobody can choose one -- REDCap offers no
+     * numeric setting type, no min or max, and no hook that can refuse a save,
+     * so the range is enforced by making a bad value impossible to pick rather
+     * than by catching one afterwards.
+     *
+     * The check stays anyway. A setting can also arrive through the API or a
+     * settings import, which no dropdown constrains, and a value stored before
+     * the choices changed outlives them. The device rejects out-of-range values
+     * instead of clamping them, and it does so at the start of a measurement
+     * with a participant sitting there; a configuration mistake should cost the
+     * setting, not the reading.
      */
     function aobpOptions(position) {
       if (!position || !deviceIsAobp()) return null;
@@ -510,13 +503,14 @@
       setFieldValue(fields.sys, b.sys);
       setFieldValue(fields.dia, b.dia);
       setFieldValue(fields.map, b.map);
-      setFieldValue(fields.hr,  b.pr);
+      setFieldValue(fields.pr,  b.pr);
 
       // Central pressure is what distinguishes a BP+ from a cuff, so it is in
       // the example rather than left as an exercise.
       setFieldValue(fields.csys, c.cSys);
       setFieldValue(fields.cdia, c.cDia);
-      setFieldValue(fields.ai,   i.sAI);
+      setFieldValue(fields.cmap, c.cMap);
+      setFieldValue(fields.sai,   i.sAI);
 
       // The raw signal-to-noise ratio rather than its band label. The label is
       // an interpretation of this number and can be recomputed; a band that
@@ -534,8 +528,13 @@
       setFieldValue(fields.device_id,
         config().simulator ? 'SIMULATED-' + measurement.deviceId : measurement.deviceId);
 
-      var rhythm = measurement.rhythm;
-      if (rhythm.known) setRadio(fields.irregular, rhythm.irregular ? '1' : '0');
+      // The measured variability, not the SDK's verdict on it. Whether a rhythm
+      // is irregular is a screening question with a threshold in it, and a
+      // stored yes/no cannot be rechecked if that threshold moves.
+      setFieldValue(fields.sprv, i.sPRV);
+      setFieldValue(fields.spr,  i.sPR);
+      setFieldValue(fields.sppv, i.sPPV);
+      setFieldValue(fields.ssep, i.sSEP);
     }
 
     /**
@@ -591,8 +590,10 @@
       var q = measurement.signalQuality;
       var rhythm = measurement.rhythm;
 
-      var rhythmText = !rhythm.known ? 'not reported'
-        : (rhythm.irregular ? 'yes (sPRV ' + rhythm.sPRV + ' ms)' : 'no');
+      // The number, not a yes/no. A verdict needs a threshold, the threshold is
+      // a screening decision this module does not make, and one shown on screen
+      // is read as one the device reached.
+      var rhythmText = rhythm.known ? rhythm.sPRV + ' ms' : 'not reported';
 
       ui.results.innerHTML =
         '<div style="background:#f4f9ff;border:1px solid #cfe2ff;border-radius:10px;' +
@@ -608,7 +609,7 @@
           '</div>' +
           '<div style="font-size:17px;color:#666;">mmHg central</div>' +
           '<div style="font-size:15px;color:#666;margin-top:14px;">' +
-            'Irregular rhythm: ' + escapeHtml(rhythmText) +
+            'Pulse-rate variability: ' + escapeHtml(rhythmText) +
             (q.known ? ' &nbsp;·&nbsp; signal ' + escapeHtml(q.label) +
                        ' (SNR ' + escapeHtml(q.snr) + ')' : '') +
           '</div>' +
@@ -1469,12 +1470,16 @@
       sys:       prefix + 'sys',
       dia:       prefix + 'dia',
       map:       prefix + 'map',
-      hr:        prefix + 'hr',
+      pr:        prefix + 'pr',
       csys:      prefix + 'csys',
       cdia:      prefix + 'cdia',
-      ai:        prefix + 'ai',
+      cmap:      prefix + 'cmap',
+      sai:        prefix + 'sai',
       snr:       prefix + 'snr',
-      irregular: prefix + 'irregular',
+      sprv:      prefix + 'sprv',
+      spr:       prefix + 'spr',
+      sppv:      prefix + 'sppv',
+      ssep:      prefix + 'ssep',
       datetime:  prefix + 'datetime',
       guid:      prefix + 'guid',
       device_id: prefix + 'device_id',

@@ -69,16 +69,20 @@ This project is a starting point and is meant to be edited.</redcap:ProjectNotes
 	<ItemGroupDef OID="bpplus_measurement.bpplus_dia" Name="Bpplus Measurement" Repeating="No">
 		<ItemRef ItemOID="bpplus_dia" Mandatory="No" redcap:Variable="bpplus_dia"/>
 		<ItemRef ItemOID="bpplus_map" Mandatory="No" redcap:Variable="bpplus_map"/>
-		<ItemRef ItemOID="bpplus_hr" Mandatory="No" redcap:Variable="bpplus_hr"/>
+		<ItemRef ItemOID="bpplus_pr" Mandatory="No" redcap:Variable="bpplus_pr"/>
 	</ItemGroupDef>
 	<ItemGroupDef OID="bpplus_measurement.bpplus_csys" Name="Central pressures and indices" Repeating="No">
 		<ItemRef ItemOID="bpplus_csys" Mandatory="No" redcap:Variable="bpplus_csys"/>
 	</ItemGroupDef>
 	<ItemGroupDef OID="bpplus_measurement.bpplus_cdia" Name="Bpplus Measurement" Repeating="No">
 		<ItemRef ItemOID="bpplus_cdia" Mandatory="No" redcap:Variable="bpplus_cdia"/>
-		<ItemRef ItemOID="bpplus_ai" Mandatory="No" redcap:Variable="bpplus_ai"/>
+		<ItemRef ItemOID="bpplus_cmap" Mandatory="No" redcap:Variable="bpplus_cmap"/>
+		<ItemRef ItemOID="bpplus_sai" Mandatory="No" redcap:Variable="bpplus_sai"/>
 		<ItemRef ItemOID="bpplus_snr" Mandatory="No" redcap:Variable="bpplus_snr"/>
-		<ItemRef ItemOID="bpplus_irregular" Mandatory="No" redcap:Variable="bpplus_irregular"/>
+		<ItemRef ItemOID="bpplus_sprv" Mandatory="No" redcap:Variable="bpplus_sprv"/>
+		<ItemRef ItemOID="bpplus_spr" Mandatory="No" redcap:Variable="bpplus_spr"/>
+		<ItemRef ItemOID="bpplus_sppv" Mandatory="No" redcap:Variable="bpplus_sppv"/>
+		<ItemRef ItemOID="bpplus_ssep" Mandatory="No" redcap:Variable="bpplus_ssep"/>
 	</ItemGroupDef>
 	<ItemGroupDef OID="bpplus_measurement.bpplus_datetime" Name="Provenance -- written by the device, not by the operator" Repeating="No">
 		<ItemRef ItemOID="bpplus_datetime" Mandatory="No" redcap:Variable="bpplus_datetime"/>
@@ -121,11 +125,11 @@ This project is a starting point and is meant to be edited.</redcap:ProjectNotes
 		<Question><TranslatedText>Brachial systolic (mmHg)</TranslatedText></Question>
 		<RangeCheck Comparator="GE" SoftHard="Soft">
 			<CheckValue>40</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 280). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 		<RangeCheck Comparator="LE" SoftHard="Soft">
-			<CheckValue>300</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>280</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 280). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 	</ItemDef>
 	<ItemDef OID="bpplus_dia" Name="bpplus_dia" DataType="integer" Length="999" redcap:Variable="bpplus_dia" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
@@ -143,14 +147,14 @@ This project is a starting point and is meant to be edited.</redcap:ProjectNotes
 		<Question><TranslatedText>Brachial mean arterial pressure (mmHg)</TranslatedText></Question>
 		<RangeCheck Comparator="GE" SoftHard="Soft">
 			<CheckValue>25</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (25 - 250). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (25 - 245). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 		<RangeCheck Comparator="LE" SoftHard="Soft">
-			<CheckValue>250</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (25 - 250). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>245</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (25 - 245). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 	</ItemDef>
-	<ItemDef OID="bpplus_hr" Name="bpplus_hr" DataType="integer" Length="999" redcap:Variable="bpplus_hr" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
+	<ItemDef OID="bpplus_pr" Name="bpplus_pr" DataType="integer" Length="999" redcap:Variable="bpplus_pr" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
 		<Question><TranslatedText>Pulse rate (bpm)</TranslatedText></Question>
 		<RangeCheck Comparator="GE" SoftHard="Soft">
 			<CheckValue>30</CheckValue>
@@ -164,42 +168,101 @@ This project is a starting point and is meant to be edited.</redcap:ProjectNotes
 	<ItemDef OID="bpplus_csys" Name="bpplus_csys" DataType="integer" Length="999" redcap:Variable="bpplus_csys" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Derived by the BP+ from the suprasystolic capture. Filled by the device -- do not type over it." redcap:SectionHeader="Central pressures and indices">
 		<Question><TranslatedText>Central systolic (mmHg)</TranslatedText></Question>
 		<RangeCheck Comparator="GE" SoftHard="Soft">
-			<CheckValue>40</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>37</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (37 - 283). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 		<RangeCheck Comparator="LE" SoftHard="Soft">
-			<CheckValue>300</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (40 - 300). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>283</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (37 - 283). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 	</ItemDef>
 	<ItemDef OID="bpplus_cdia" Name="bpplus_cdia" DataType="integer" Length="999" redcap:Variable="bpplus_cdia" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="Filled by the BP+. Do not type over it.">
 		<Question><TranslatedText>Central diastolic (mmHg)</TranslatedText></Question>
 		<RangeCheck Comparator="GE" SoftHard="Soft">
-			<CheckValue>20</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (20 - 200). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>17</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (17 - 203). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 		<RangeCheck Comparator="LE" SoftHard="Soft">
-			<CheckValue>200</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (20 - 200). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>203</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (17 - 203). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 	</ItemDef>
-	<ItemDef OID="bpplus_ai" Name="bpplus_ai" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_ai" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="sAI. Can legitimately be negative in a young participant.">
-		<Question><TranslatedText>Augmentation index (%)</TranslatedText></Question>
+	<ItemDef OID="bpplus_cmap" Name="bpplus_cmap" DataType="integer" Length="999" redcap:Variable="bpplus_cmap" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="cMap. Derived by the BP+ from the suprasystolic capture, like the two above.">
+		<Question><TranslatedText>Central mean arterial pressure (mmHg)</TranslatedText></Question>
 		<RangeCheck Comparator="GE" SoftHard="Soft">
-			<CheckValue>-50</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (-50 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>22</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (22 - 248). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 		<RangeCheck Comparator="LE" SoftHard="Soft">
-			<CheckValue>100</CheckValue>
-			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (-50 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+			<CheckValue>248</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (22 - 248). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_sai" Name="bpplus_sai" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_sai" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="sAI. A ratio against the incident wave amplitude, not against pulse pressure, so it is always positive and has no ceiling at 100 -- a small incident wave sends it up without limit. sAIx is the one that can be negative; this is not it.">
+		<Question><TranslatedText>Suprasystolic augmentation index (%)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>0</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 500). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>500</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 500). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
 		</RangeCheck>
 	</ItemDef>
 	<ItemDef OID="bpplus_snr" Name="bpplus_snr" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_snr" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="The raw number, not its quality band. A band that moved later would leave a stored label wrong with nothing to check it against.">
 		<Question><TranslatedText>Signal-to-noise ratio (dB)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>0</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>100</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
 	</ItemDef>
-	<ItemDef OID="bpplus_irregular" Name="bpplus_irregular" DataType="text" Length="1" redcap:Variable="bpplus_irregular" redcap:FieldType="radio" redcap:FieldNote="From the pulse-rate variability measured during the suprasystolic capture. Left blank when the device did not report it.">
-		<Question><TranslatedText>Irregular rhythm detected</TranslatedText></Question>
-		<CodeListRef CodeListOID="bpplus_irregular.choices"/>
+	<ItemDef OID="bpplus_sprv" Name="bpplus_sprv" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_sprv" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="sPRV: the RMSSD of the beat intervals during the suprasystolic capture. Left blank when the device did not report it.">
+		<Question><TranslatedText>Suprasystolic pulse-rate variability (ms)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>0</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 2000). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>2000</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 2000). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_spr" Name="bpplus_spr" DataType="integer" Length="999" redcap:Variable="bpplus_spr" redcap:FieldType="text" redcap:TextValidationType="int" redcap:FieldNote="sPR: the pulse rate measured during the suprasystolic capture. Not the same field as bpplus_pr, which is the rate from the cuff determination.">
+		<Question><TranslatedText>Suprasystolic pulse rate (bpm)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>30</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (30 - 240). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>240</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (30 - 240). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_sppv" Name="bpplus_sppv" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_sppv" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="sPPV.">
+		<Question><TranslatedText>Suprasystolic pulse pressure variation (%)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>0</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>100</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (0 - 100). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+	</ItemDef>
+	<ItemDef OID="bpplus_ssep" Name="bpplus_ssep" DataType="float" Length="999" SignificantDigits="1" redcap:Variable="bpplus_ssep" redcap:FieldType="text" redcap:TextValidationType="float" redcap:FieldNote="sSEP, measured during the suprasystolic capture.">
+		<Question><TranslatedText>Systolic ejection period (ms)</TranslatedText></Question>
+		<RangeCheck Comparator="GE" SoftHard="Soft">
+			<CheckValue>50</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (50 - 1000). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
+		<RangeCheck Comparator="LE" SoftHard="Soft">
+			<CheckValue>1000</CheckValue>
+			<ErrorMessage><TranslatedText>The value you provided is outside the suggested range (50 - 1000). This value is admissible, but you may wish to double check it.</TranslatedText></ErrorMessage>
+		</RangeCheck>
 	</ItemDef>
 	<ItemDef OID="bpplus_datetime" Name="bpplus_datetime" DataType="datetime" Length="999" redcap:Variable="bpplus_datetime" redcap:FieldType="text" redcap:TextValidationType="datetime_seconds_ymd" redcap:FieldNote="The clock inside the device, which is what the result XML records. The module checks it against this computer before every measurement and sets it when it has drifted." redcap:SectionHeader="Provenance -- written by the device, not by the operator">
 		<Question><TranslatedText>Measurement time (device clock)</TranslatedText></Question>
@@ -231,10 +294,6 @@ This project is a starting point and is meant to be edited.</redcap:ProjectNotes
 	<CodeList OID="bpplus_position.choices" Name="bpplus_position" DataType="text" redcap:Variable="bpplus_position">
 		<CodeListItem CodedValue="seated"><Decode><TranslatedText>Seated</TranslatedText></Decode></CodeListItem>
 		<CodeListItem CodedValue="standing"><Decode><TranslatedText>Standing</TranslatedText></Decode></CodeListItem>
-	</CodeList>
-	<CodeList OID="bpplus_irregular.choices" Name="bpplus_irregular" DataType="text" redcap:Variable="bpplus_irregular">
-		<CodeListItem CodedValue="1"><Decode><TranslatedText>Yes</TranslatedText></Decode></CodeListItem>
-		<CodeListItem CodedValue="0"><Decode><TranslatedText>No</TranslatedText></Decode></CodeListItem>
 	</CodeList>
 	<CodeList OID="bpplus_measurement_complete.choices" Name="bpplus_measurement_complete" DataType="text" redcap:Variable="bpplus_measurement_complete">
 		<CodeListItem CodedValue="0"><Decode><TranslatedText>Incomplete</TranslatedText></Decode></CodeListItem>

@@ -16,7 +16,7 @@ The cuff measurement, as any oscillometric monitor produces it.
 | `<p>sys` | integer, 40–300 | `<Sys>` | Systolic, mmHg |
 | `<p>dia` | integer, 20–200 | `<Dia>` | Diastolic, mmHg |
 | `<p>map` | integer, 25–250 | `<Map>` | Mean arterial pressure, mmHg |
-| `<p>hr` | integer, 30–240 | `<Pr>` | Pulse rate, bpm |
+| `<p>pr` | integer, 30–240 | `<Pr>` | Pulse rate, bpm |
 
 The validation ranges are the **device's** declared measurement limits, not
 clinical ones. A range narrower than what the device can produce turns a real
@@ -31,22 +31,56 @@ found under `<Result>`.
 
 | Field | Type | From | |
 |---|---|---|---|
-| `<p>csys` | integer, 40–300 | `<cSys>` | Central systolic, mmHg |
-| `<p>cdia` | integer, 20–200 | `<cDia>` | Central diastolic, mmHg |
-| `<p>ai` | number, −50–100 | `<sAI>` | Augmentation index, % |
-| `<p>snr` | number | `<SNR>` | Signal-to-noise ratio, dB |
+| `<p>csys` | integer, 37–283 | `<cSys>` | Central systolic, mmHg |
+| `<p>cdia` | integer, 17–203 | `<cDia>` | Central diastolic, mmHg |
+| `<p>cmap` | integer, 22–248 | `<cMap>` | Central mean arterial pressure, mmHg |
+| `<p>sai` | number, 0–500 | `<sAI>` | Suprasystolic augmentation index, % |
+| `<p>snr` | number, 0–100 | `<SNR>` | Signal-to-noise ratio, dB |
+| `<p>spr` | integer, 30–240 | `<sPR>` | Pulse rate from the suprasystolic capture, bpm |
+| `<p>sppv` | number, 0–100 | `<sPPV>` | Pulse pressure variation, % |
+| `<p>ssep` | number, 50–1000 | `<sSEP>` | Systolic ejection period, ms |
 
-`sAI` can legitimately be **negative** in a young participant, which is why the
-minimum is not zero. A validation range starting at 0 rejects exactly the
-participants a vascular-ageing study is most interested in.
+`sAI` is **always positive and has no ceiling at 100 %**. Its denominator is the
+incident wave amplitude, not the pulse pressure, so a small incident wave sends
+the ratio up without limit. `sAIx` is the measure that can go negative — a type C
+waveform gives an `sAI` below 100 % while `sAIx` is below zero. They are
+different quantities and this instrument stores the first.
+
+`<p>spr` and `<p>pr` are different measurements and this is exactly why the
+field names follow the XML. `<Pr>` is the pulse rate from the cuff
+determination; `<sPR>` is the rate from the suprasystolic capture. They agree
+often and not always, and a field called `hr` would have hidden which one it was.
+
+### Where the ranges come from
+
+Every range here is the **rated** range for that measure, from
+`bpplus-measures-kb` — one file per measure, under
+`D:\BPplus\Specifications\BPplus\bpplus-measures-kb\measures`. The knowledge
+base defines four different ranges and says the rated one governs display: it is
+the span the device is *validated* over, narrower than the measurement range the
+sensor can physically reach and unrelated to any clinical or normal range.
+
+The central pressures are the brachial ones **widened by 3 mmHg at each end** —
+37–283 against 40–280, and so on. That is recorded in the knowledge base, not
+derived here, and it is why they cannot simply be copied from the brachial
+fields.
+
+Do not narrow a range to look sensible. REDCap's check is *soft*, so an
+out-of-range value still saves, but the operator is asked to confirm a reading
+that was never in doubt — and an operator taught to dismiss that prompt will
+dismiss the one that matters.
+
+`sAI`, `SNR`, `sPRV`, `sPPV` and `sSEP` are marked **provisional** in the
+knowledge base, from a draft RS:CALCS revision. Re-check them when `@p` is
+released.
 
 `<p>snr` stores the **raw dB and not the quality band**. The label ("Excellent",
 "Poor") is an interpretation of this number and can be recomputed from it at any
 time; a band whose thresholds moved later would leave a stored label wrong, with
 nothing in the record to check it against.
 
-The SDK exposes more indices than these — `sPP`, `sPPV`, `sSEP`, `sRWTTFoot`,
-`sRWTTPeak`, `sDpDtMax` — through `measurement.indices`. They are not in the
+The SDK exposes more indices than these — `sPP`, `sRWTTFoot`, `sRWTTPeak`,
+`sDpDtMax` — through `measurement.indices`. They are not in the
 example instrument because most studies do not use them, and they are all in the
 retained XML for the ones that do. Add fields and extend `storeResult()` if you
 need them.
@@ -55,15 +89,27 @@ need them.
 
 | Field | Type | From | |
 |---|---|---|---|
-| `<p>irregular` | radio, `1`/`0` | `<sPRV>` | Irregular rhythm detected |
+| `<p>sprv` | number, ms | `<sPRV>` | Pulse-rate variability |
 
-Derived from pulse-rate variability during the suprasystolic capture, not
-reported directly by the device as a yes/no. Left **blank** when the device did
-not report `sPRV` — blank means "not assessed", which is different from "no", and
-collapsing the two would be a claim the device never made.
+`sPRV` is the RMSSD of the beat intervals during the suprasystolic capture. The
+**measured number** is stored, and nothing here judges it.
 
-This is a radio, so the module *clicks* the option (`opt-<field>_1` / `_0`).
-Setting `.value` on a REDCap radio group records nothing.
+Whether that counts as an irregular rhythm is a screening question with a
+threshold in it. A stored yes/no could not be rechecked if the threshold moved,
+and the number can always be re-judged — the same reason `<p>snr` holds the raw
+dB rather than its quality band.
+
+Left **blank** when the device did not report `sPRV`. Blank means "not measured",
+which is different from any value, and collapsing the two would be a claim the
+device never made.
+
+There is **no range** on this field. The device declares none for `sPRV`, and a
+range narrower than what it can produce turns a real reading into a REDCap error
+the operator has no way to resolve.
+
+The result also carries `<IrregularHeartBeat>` and `<MotionDetected>`, which the
+SDK does not read and this instrument does not store. Both are in the retained
+XML for a study that wants them.
 
 ## Provenance
 

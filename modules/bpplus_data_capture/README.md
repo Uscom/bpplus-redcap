@@ -62,7 +62,7 @@ which of these an administrator has to do and which a project owner can.
 | Largest recording this project will accept | 1 MB | May be lowered to 0.6, not raised |
 | Set the device clock when it is out by more than *n* minutes | 5 | See **The device clock** |
 | Require the device to be in a particular measurement mode | any | Refuses to measure otherwise |
-| Refuse a measurement started on the device itself | off | See below |
+| Allow a measurement started on the device itself | off | **Leave it off** — see below |
 | AOBP timings, seated and standing | *(device default)* | See **AOBP** |
 | Show warnings from attempts the device recovered from | off | See **A warning on a measurement that worked** |
 | Log every serial line to the browser console | off | Troubleshooting only |
@@ -101,12 +101,16 @@ rather than an edit to this module.
 | Brachial systolic | `<p>sys` | |
 | Brachial diastolic | `<p>dia` | |
 | Mean arterial pressure | `<p>map` | |
-| Pulse rate | `<p>hr` | |
+| Pulse rate | `<p>pr` | |
 | Central systolic | `<p>csys` | What a BP+ is for |
 | Central diastolic | `<p>cdia` | |
-| Augmentation index | `<p>ai` | `sAI`; legitimately negative in a young participant |
+| Central mean arterial pressure | `<p>cmap` | |
+| Suprasystolic augmentation index | `<p>sai` | `sAI`, 0–500 %. Always positive — `sAIx` is the one that goes negative |
 | Signal-to-noise ratio | `<p>snr` | The raw dB, not its band label |
-| Irregular rhythm | `<p>irregular` | A radio, `1`/`0` |
+| Pulse-rate variability | `<p>sprv` | `sPRV`, the RMSSD of the beat intervals, in ms. The **number**, not a verdict on it |
+| Suprasystolic pulse rate | `<p>spr` | `sPR` — the suprasystolic capture's rate, **not** `<p>pr` from the cuff |
+| Suprasystolic pulse pressure variation | `<p>sppv` | `sPPV` |
+| Systolic ejection period | `<p>ssep` | `sSEP`, ms |
 | Body position | `<p>position` | A radio, `seated`/`standing`. **The one field the operator fills** |
 | Measurement time | `<p>datetime` | The device clock, reformatted — see below |
 | Measurement GUID | `<p>guid` | |
@@ -118,9 +122,16 @@ A field the module writes and the instrument does not have is reported once per
 measurement in the browser console, and the measurement continues. Silence there
 would mean a study discarding a value for its whole run.
 
-`<p>irregular` is a radio, so the module **clicks** the option
-(`opt-<field>_1` / `_0`) rather than setting a value. That is the only way REDCap
-records the choice.
+Every field name is the BP+ XML element it comes from, lowercased — `<cSys>` is
+`<p>csys`, `<sAI>` is `<p>sai`, `<Pr>` is `<p>pr`. The field name is the only
+thing linking a column in an export to the element in the device's own result
+file, and an abbreviation makes whoever reconciles the two guess. REDCap field
+names are lowercase-only, so the case does not survive; the spelling does.
+
+**If you add a radio the module writes**, note that REDCap records the choice
+only when the option is *clicked* — `opt-<field>_<value>` — not when a value is
+set on the group. None of the fields above need it, since `<p>position` is a
+radio the operator fills rather than the module.
 
 ---
 
@@ -187,11 +198,16 @@ use.
 
 Each position has three settings, and each is blank by default:
 
-| | Range | Blank means |
+| | Choices | Blank means |
 |---|---|---|
-| Rest before the first reading | 0–900 s | seated 300, standing 60 |
-| Interval between readings | 0–180 s | 30 |
+| Rest before the first reading | 0, 15, 30, 45, 60, 90, 120, 180, 240, 300, 600, 900 s | seated 300, standing 60 |
+| Interval between readings | 0, 10, 15, 20, 30, 45, 60, 90, 120, 180 s | 30 |
 | Number of readings | 1–5 | seated 3, standing 2 |
+
+All three are **dropdowns**, and that is not a style choice. REDCap has no
+numeric setting type, no `min`/`max`, and no hook that can refuse a save — its
+`validation` key applies only to `field-list`. So a value outside the device's
+range cannot be validated; it can only be made impossible to pick.
 
 **Blank sends nothing**, and the *device* applies its own default. Those defaults
 differ between the positions, which is exactly why the module does not fill them
@@ -254,10 +270,21 @@ ID and belongs to no record. The device stores it all the same, so it is not
 harmless: it leaves an unattributed reading in the device's file list, taken
 outside the protocol.
 
-**Refuse a measurement started on the device itself** makes the module watch for
-that and cancel it. Off by default — a general-purpose module should not
-interfere with a device it is only attached to — and worth turning on for any
-study where every reading has to belong to a participant.
+The module watches for it and **cancels it**, telling the operator to use the
+buttons on the page so the reading is saved against the right participant. It is
+one cancel per press: the device sends several mode messages for a single Start,
+and three cancels would be two too many.
+
+That is the **default**, because every measurement this module takes is recorded
+against a record, and a device-started one never reaches REDCap at all.
+**Allow a measurement started on the device itself** turns the refusal off, and
+is there for a project that watches a device rather than recording from it.
+
+The setting is phrased as *allow* rather than *refuse* on purpose. A REDCap
+checkbox is unticked in every new project and its `default` key is documented as
+unreliable, so the safe behaviour has to be the unticked one — otherwise a
+project that never opened the settings page would be running with the refusal
+off.
 
 ### Failures
 
@@ -544,6 +571,25 @@ A server is required: ES modules and the device APIs both refuse to run from
 Served from the repository root it fetches the **shipped** instrument markup, so
 what you test is what a project gets; served on its own it falls back to a built-in
 copy and says so in a banner.
+
+### Seeing the settings page
+
+```
+http://localhost:8080/modules/bpplus_data_capture/test/settings.html
+```
+
+Renders `config.json` the way **REDCap** renders it, which is not the same as
+reading the file. REDCap treats each setting's `name` as HTML, so a default
+written as `REDCAP-<record>-<instance>` reaches an administrator as `REDCAP--` —
+the browser reads the angle brackets as tags and drops them, along with what they
+appear to wrap. Nothing warns.
+
+The page shows what an administrator would see, what was written, and flags
+anything that will not survive the trip. `?config=<url>` previews another
+module's file.
+
+It is not REDCap's styling. It is REDCap's *interpretation*, which is the part
+that goes wrong silently.
 
 ### Seeing where the recording goes
 
