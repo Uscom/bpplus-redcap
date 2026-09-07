@@ -501,6 +501,40 @@ console.log('\nan AOBP measurement knows which posture it is');
   check('and a measurement without one is refused in AOBP mode',
     /deviceIsAobp\(\) && !position/.test(module) && /return false;/.test(module));
 
+  // Every value the dropdown offers has to BE a MeasureMode. It offered 1 for
+  // "BP+", and 1 is bpOnly — so a project configured for BP+ refused a BP+ with
+  // "This BP+ is in BP+ mode. This project needs Only BP.", which reads like a
+  // module arguing with itself. Nothing else was wrong: both readers handle a
+  // zero correctly, and the label came from the SDK, which is why the message
+  // was able to name the mode it had been given.
+  {
+    const { MeasureMode, describeMeasureMode } = await import('../sdk/constants.js');
+    const modes = Object.values(MeasureMode);
+    const setting = JSON.parse(fs.readFileSync(new URL('../config.json', import.meta.url), 'utf8'))
+      ['project-settings'].find(s => s.key === 'require-mode');
+
+    const offered = setting.choices.filter(c => c.value !== '');
+    const unknown = offered.filter(c => !modes.includes(Number(c.value)));
+    check('every mode the dropdown offers is a real MeasureMode',
+      unknown.length === 0,
+      unknown.map(c => c.value + ' (' + c.name + ')').join(', '));
+
+    // The name in the dropdown and the name the device reports have to be the
+    // same mode, or the refusal message contradicts the setting that caused it.
+    const mismatched = offered.filter(c => {
+      const label = describeMeasureMode(Number(c.value)).label;
+      return !c.name.toLowerCase().startsWith(label.toLowerCase());
+    });
+    check('and is named as the device names it',
+      mismatched.length === 0,
+      mismatched.map(c => c.value + ': "' + c.name + '" vs "' +
+        describeMeasureMode(Number(c.value)).label + '"').join(', '));
+
+    check('BP+ is offered as 0 and AOBP as 5',
+      offered.some(c => c.value === '0') && offered.some(c => c.value === '5'),
+      offered.map(c => c.value).join(','));
+  }
+
   // The mode is the device's own answer, not what a project asked for: a
   // project can require a mode and cannot make the device be in it.
   check('AOBP mode is read from the feature list',
