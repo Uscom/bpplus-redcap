@@ -70,7 +70,17 @@
   // locked out. Do not tighten this.
   var PORT_FILTERS = null;
 
+  // Set up once per page, however many times we are asked to.
+  //
+  // A second start() wires a second handler onto every control and runs a
+  // second silent resume, and two resumes race: both find no device, both open
+  // a port, and the first is left open with nothing referencing it.
+  var started = false;
+
   document.addEventListener('DOMContentLoaded', function () {
+    if (started) return;
+    started = true;
+
     start().catch(function (error) {
       console.error('[BP+] failed to start', error);
     });
@@ -98,7 +108,10 @@
     var apiVersion = null;      // the reply to `?`, or null if unreadable
     var lastMeasurement = null;
     var lastClockSync = null;
-    var busy = false;           // a measurement is on the arm right now
+    var busy = false;
+
+    // One connection attempt at a time. See connect().
+    var connecting = false;           // a measurement is on the arm right now
     var cancelling = false;     // a cancel has been sent and not yet answered
     var filing = false;         // the recording is on its way to the server
     var stored = false;         // at least one reading has reached the record
@@ -171,6 +184,43 @@
       options = options || {};
       var api = await loadSdk();
       var cfg = config();
+
+      // Whatever was open is released before anything else is opened.
+      //
+      // connect() built a new device and a new transport every time it was
+      // called, and dropped the previous one wherever it stood. Connecting
+      // twice therefore stranded the first port exactly as a failed connect
+      // used to: nothing referenced it, and nothing could close it. The window
+      // is real — resumeConnection() runs at page load and the Connect button is
+      // live until it finishes, so an operator who presses it during that
+      // moment gets two.
+      if (device) {
+        await Promise.race([
+          device.disconnect().catch(function () { /* already gone */ }),
+          new Promise(function (resolve) { setTimeout(resolve, 4000); }),
+        ]);
+        device = null;
+        features = null;
+      }
+
+      // Claimed synchronously, before the first await. `device` is not set
+      // until the transport has been built, so two calls that start together
+      // both get past the check above and both open a port — which is precisely
+      // what two resumes did. A flag set here cannot be raced, because nothing
+      // yields between the check and the set.
+      if (connecting) {
+        throw new Error('A connection attempt is already in progress.');
+      }
+      connecting = true;
+
+      try {
+        return await openAndVerify(api, cfg, options);
+      } finally {
+        connecting = false;
+      }
+    }
+
+    async function openAndVerify(api, cfg, options) {
 
       device = new api.BpPlusDevice(makeTransport(api, options), {
         // A measurement started with the device's own button carries no patient
@@ -1458,6 +1508,8 @@
      * and the operator's click supplies the gesture the picker needs.
      */
     async function resumeConnection() {
+      if (device) return;              // a click got there first
+
       try {
         await connect({ silent: true });
         setStatus('success', 'BP+ reconnected. Press Measure when the cuff is on.');

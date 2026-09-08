@@ -549,6 +549,27 @@ console.log('\nan AOBP measurement knows which posture it is');
       'opened ' + opened + ', closed ' + closed);
   }
 
+  // Connecting when already connected built a second device and dropped the
+  // first wherever it stood, stranding its port the same way a refusal used to.
+  // Two silent resumes did exactly that: both found no device, both opened, and
+  // the first was left with nothing referencing it.
+  {
+    const module = fs.readFileSync(new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+
+    check('a second start is refused, so one page means one resume',
+      /var started = false;/.test(module) && /if \(started\) return;/.test(module));
+
+    // `device` is not set until the transport exists, so a check on it cannot
+    // stop two attempts that begin together. The claim has to happen before the
+    // first await.
+    check('and a second attempt cannot race the first',
+      /var connecting = false;/.test(module) && /connecting = true;/.test(module));
+
+    const connect = module.slice(module.indexOf('async function connect(options)'));
+    check('an existing connection is released before another is opened',
+      connect.indexOf('device.disconnect()') < connect.indexOf('connecting = true'));
+  }
+
   // Every value the dropdown offers has to BE a MeasureMode. It offered 1 for
   // "BP+", and 1 is bpOnly — so a project configured for BP+ refused a BP+ with
   // "This BP+ is in BP+ mode. This project needs Only BP.", which reads like a
