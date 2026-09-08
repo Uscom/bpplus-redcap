@@ -189,8 +189,8 @@
           <option value="cancel">Cancelled at the device</option>
         </select>
       </div>
-      <div>
-        <label for="devicemode">Device is in</label>
+      <div id="devicemode-wrap">
+        <label for="devicemode">Simulated device is in</label>
         <select id="devicemode">
           <option value="bpplus">BP+ (suprasystolic, single measurement)</option>
           <option value="aobp">BP+ AOBP (averaged, unattended)</option>
@@ -390,7 +390,13 @@ $('transport').value = settings.transport;
 $('scenario').value  = settings.scenario;
 $('record').value    = settings.record;
 $('prefix').value    = settings.prefix;
-$('scenario-wrap').hidden = settings.transport !== 'sim';
+// Both describe the simulated device, and neither can reach a real one. A
+// dropdown that looks like it sets the mode of the BP+ on the desk would be
+// worse than no dropdown: the mode of a real device is changed on the device,
+// and read back from it — the module writes what it read into #device-info,
+// which is where it belongs.
+$('scenario-wrap').hidden   = settings.transport !== 'sim';
+$('devicemode-wrap').hidden = settings.transport !== 'sim';
 
 $('require').value    = settings.require;
 $('devicemode').value = settings.aobpMode ? 'aobp' : 'bpplus';
