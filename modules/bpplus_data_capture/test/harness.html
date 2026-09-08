@@ -190,6 +190,21 @@
         </select>
       </div>
       <div>
+        <label for="devicemode">Device is in</label>
+        <select id="devicemode">
+          <option value="bpplus">BP+ (suprasystolic, single measurement)</option>
+          <option value="aobp">BP+ AOBP (averaged, unattended)</option>
+        </select>
+      </div>
+      <div>
+        <label for="require">Project requires (module setting)</label>
+        <select id="require">
+          <option value="">Any mode</option>
+          <option value="0">BP+ (suprasystolic, single measurement)</option>
+          <option value="5">BP+ AOBP (averaged, unattended)</option>
+        </select>
+      </div>
+      <div>
         <label for="record">Record ID (sent as the patient ID)</label>
         <input type="text" id="record" value="DEMO-001">
       </div>
@@ -354,6 +369,12 @@ const settings = {
   patientIdMode:     params.get('patientidmode') || 'default',
   patientIdTemplate: params.get('patientid') || '',
 
+  // What the project's "Require the device to be in a particular measurement
+  // mode" setting is set to: '' for any, otherwise a MeasureMode. Kept as a
+  // string so that '0' -- BP+, and a perfectly good requirement -- survives the
+  // trip, which is the distinction the setting itself got wrong.
+  require:           params.get('require') || '',
+
   detailedWarnings:  params.get('warnings') === '1',
   simulator:         params.get('simulated') === '1',
 
@@ -371,7 +392,17 @@ $('record').value    = settings.record;
 $('prefix').value    = settings.prefix;
 $('scenario-wrap').hidden = settings.transport !== 'sim';
 
-for (const id of ['transport', 'scenario', 'prefix']) {
+$('require').value    = settings.require;
+$('devicemode').value = settings.aobpMode ? 'aobp' : 'bpplus';
+
+// The device mode lives in ?mode= and the requirement in ?require=, because the
+// two are different questions: what the BP+ is set to, and what the project will
+// accept. Testing the refusal needs both, and they are the pair a project gets
+// wrong.
+$('devicemode').addEventListener('change',
+  () => reloadWith({ mode: $('devicemode').value === 'aobp' ? 'aobp' : '' }));
+
+for (const id of ['transport', 'scenario', 'prefix', 'require']) {
   $(id).addEventListener('change', () => reloadWith({ [id]: $(id).value }));
 }
 // The record ID is read at measurement time, not at start-up, so it needs no
@@ -397,7 +428,26 @@ function reloadWith(changes) {
     `${env.android ? ' &middot; Android' : ''}` +
     `${env.secureContext ? '' : ' &middot; <b>not a secure context - the device APIs are unavailable</b>'}` +
     `<br><b>A real BP+ would connect over:</b> ${pick.kind || 'nothing available'} &mdash; ${pick.reason}` +
+    `<br><b>Module:</b> <span id="module-version">reading config.json…</span>` +
     `<br><b>SDK:</b> ${sdk.SDK_VERSION}, written against Terminal API ${sdk.TERMINAL_API_VERSION}`;
+
+  // The module's own version, from the file REDCap reads it from. Worth showing
+  // beside the SDK's: two version numbers travel together in this folder and
+  // only one of them was ever on screen, so "which build is this?" could be
+  // answered for the SDK and not for the module wrapped around it.
+  fetch(new URL('../config.json', location.href), { cache: 'no-store' })
+    .then(reply => reply.ok ? reply.json() : null)
+    .then(config => {
+      const el = $('module-version');
+      if (!el) return;
+      el.textContent = config
+        ? `${config.name} ${config.version}`
+        : 'config.json not readable from here';
+    })
+    .catch(() => {
+      const el = $('module-version');
+      if (el) el.textContent = 'config.json not readable from here';
+    });
 }
 
 // -- The instrument ------------------------------------------------------------
@@ -540,6 +590,7 @@ window.BPPLUS_CONFIG = {
   detailedWarnings: settings.detailedWarnings,
   simulator: settings.simulator,
 
+
   aobp: {
     seated:   { initialDelaySeconds: settings.aobpTimings[0] || '',
                 repeatDelaySeconds:  settings.aobpTimings[1] || '',
@@ -554,7 +605,11 @@ window.BPPLUS_CONFIG = {
   sdkUrl: new URL(SDK_URL, location.href).href,
   saveXmlAsFile: true,
   clockToleranceMinutes: 5,
-  requiredMode: null,
+  // The project's "Require the device to be in a particular measurement mode".
+  // It was pinned to null here, so the setting could not be exercised from this
+  // page at all: whatever the dropdown said, the module was told "any mode".
+  // '' means any, and the module reads null for that exactly as the PHP does.
+  requiredMode: settings.require === '' ? null : Number(settings.require),
   hostStartedOnly: false,
   trace: false,
 };
