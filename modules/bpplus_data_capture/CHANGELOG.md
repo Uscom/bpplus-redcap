@@ -7,6 +7,52 @@ version and stays on it.
 The version here must match the directory name REDCap installs it as, and the
 release tag. The release workflow refuses a tag that disagrees.
 
+## 2.0.1 — 2026-09-08
+
+**If you have set "Require the device to be in a particular measurement mode"
+to BP+, set it again.** The dropdown offered `1` for that choice, and 1 is
+`Only BP`. A project configured for BP+, with a BP+ in BP+ mode on the desk,
+refused to measure: *"This BP+ is in BP+ mode. This project needs Only BP."*
+It offers `0` now, so the stored `1` is no longer one of the choices and the
+setting has to be picked again. AOBP was always correct at 5.
+
+### A refused device gives its port back
+
+Refusing a device for its mode threw straight out of `connect()`, and the
+caller dropped the reference without disconnecting. The transport was left
+holding the port and its stream locks, so the next Connect got the same
+`SerialPort`, `open()` answered *"The port is already open"*, and nothing could
+close it. Unplugging the cable was the only way out -- after a refusal that is
+not a fault, and that the operator is meant to act on and try again.
+
+### One port at a time
+
+Connecting while already connected built a second device and left the first
+wherever it stood. Two silent resumes did exactly that at page load, because
+nothing stopped `start()` running twice: both found no device, both opened a
+port, and the first was stranded. `start()` now runs once per page, and a
+connection attempt is claimed before its first `await` -- a check on `device`
+cannot stop two attempts that begin together, because it is not set until the
+transport exists.
+
+### A restart is noticed, and a device that changed underneath is let go
+
+Changing the mode reboots the BP+, and the USB device is the Prolific adapter:
+nothing re-enumerates, no disconnect is fired, and the port stays open. A
+project requiring AOBP would have kept a live Measure button attached to a
+device that had since restarted into something else. `M 00` is read as the
+restart it is; the device is checked again and released if it is no longer
+acceptable, putting Connect back where the operator can act.
+
+### The test harness
+
+- **Project requires** and **Simulated device is in** dropdowns. `requiredMode`
+  was pinned to `null`, so the setting could not be exercised from the harness
+  at all -- which is why the refusal above was first met on a real REDCap.
+- The module's own version is reported above the SDK's, read from `config.json`.
+
+Nothing in `sdk/` changed: still v1.3.0, verified against its manifest.
+
 ## 2.0.0 — 2026-09-07
 
 **The instrument changed incompatibly. Re-import the data dictionary.** Three
