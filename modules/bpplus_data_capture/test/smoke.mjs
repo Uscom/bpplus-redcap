@@ -549,6 +549,74 @@ console.log('\nan AOBP measurement knows which posture it is');
       'opened ' + opened + ', closed ' + closed);
   }
 
+  // A restart is the only moment the mode can change under a live connection.
+  //
+  // Changing it reboots the BP+, and the USB device is the Prolific adapter
+  // rather than the BP+: nothing re-enumerates, Chrome fires no disconnect, and
+  // the port stays open. A project requiring AOBP would go on believing the
+  // feature list it read before the reboot, with Measure live, and take a
+  // reading under whatever protocol the device is in now. The refusal at
+  // connect exists to stop exactly that, and a restart walks around it.
+  if (JSDOM) {
+    const sdkUrl = new URL('../sdk/index.js', import.meta.url).href;
+
+    const afterRestart = async (startMode, restartMode, required) => {
+      const w = new JSDOM(`<!doctype html><html><body>
+        <button id="bpplus-connect"></button><button id="bpplus-measure"></button>
+        <div id="bpplus-status"></div><div id="bpplus-results"></div>
+      </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true }).window;
+      globalThis.DOMParser = w.DOMParser; globalThis.XMLSerializer = w.XMLSerializer;
+      Object.defineProperty(w, 'crypto', { value: globalThis.crypto, configurable: true });
+      w.TextEncoder = TextEncoder;
+
+      let transport = null, opened = 0, closed = 0;
+      w.BPPLUS_CONFIG = { record: 'R1', sdkUrl, requiredMode: required };
+      w.BPPLUS_TRANSPORT = function (api) {
+        transport = new api.SimulatorTransport({ tickMs: 2, measureMode: startMode });
+        const o = transport.open.bind(transport), c = transport.close.bind(transport);
+        transport.open  = (...a) => { opened++; return o(...a); };
+        transport.close = (...a) => { closed++; return c(...a); };
+        return transport;
+      };
+      w.console.log = () => {}; w.console.warn = () => {}; w.console.error = () => {};
+
+      w.eval(fs.readFileSync(new URL('../js/bpplus-capture.js', import.meta.url), 'utf8'));
+      w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+      await new Promise(r => setTimeout(r, 200));
+      try { await w.BPPLUS.connect(); } catch (e) { /* refused */ }
+      await new Promise(r => setTimeout(r, 300));
+
+      transport._measureMode = restartMode;
+      w.BPPLUS.device?._session.emit('mode', { code: 0, name: 'initial' });
+      await new Promise(r => setTimeout(r, 800));
+
+      return {
+        measure: !w.document.getElementById('bpplus-measure').disabled,
+        connectShown: w.document.getElementById('bpplus-connect').style.display !== 'none',
+        stillOpen: opened - closed,
+        status: String(w.document.getElementById('bpplus-status').innerText || ''),
+      };
+    };
+
+    const kept = await afterRestart(5, 5, 5);
+    check('a restart into the required mode keeps the connection',
+      kept.measure && !kept.connectShown && kept.stillOpen === 1,
+      JSON.stringify(kept).slice(0, 90));
+
+    const dropped = await afterRestart(5, 0, 5);
+    check('a restart out of it takes Measure away',
+      !dropped.measure && /This BP\+ is in .* mode/.test(dropped.status),
+      JSON.stringify(dropped).slice(0, 90));
+    check('and gives back both the port and the Connect button',
+      dropped.stillOpen === 0 && dropped.connectShown,
+      'open ' + dropped.stillOpen + ', connect shown ' + dropped.connectShown);
+
+    // A project with no requirement has nothing to check, so nothing changes.
+    const indifferent = await afterRestart(5, 0, undefined);
+    check('a project that requires no mode is undisturbed by a restart',
+      indifferent.measure && indifferent.stillOpen === 1);
+  }
+
   // Connecting when already connected built a second device and dropped the
   // first wherever it stood, stranding its port the same way a refusal used to.
   // Two silent resumes did exactly that: both found no device, both opened, and

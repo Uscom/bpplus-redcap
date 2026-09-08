@@ -243,6 +243,24 @@
             'so the reading is saved against the right participant.');
       });
 
+      // The BP+ restarting is invisible unless the device says so.
+      //
+      // Changing the measurement mode reboots it, and the USB device is the
+      // Prolific adapter rather than the BP+ — nothing re-enumerates, Chrome
+      // fires no disconnect, and the port stays open. So a project that
+      // requires AOBP could go on believing a feature list read before the
+      // reboot, with Measure live, and take a reading under whatever protocol
+      // the device is in now. The refusal at connect exists precisely to stop
+      // that, and a restart walks around it.
+      //
+      // M 00 is the device announcing itself from the start, which only a
+      // restart produces.
+      device.on('mode', function (mode) {
+        if (!sdk || mode.code !== sdk.DeviceMode.initial) return;
+        if (busy || filing) return;      // whatever is running will report its own end
+        recheckAfterRestart();
+      });
+
       device.on('log', function (entry) {
         if (config().trace) {
           console.log('[BP+] ' + (entry.dir === 'tx' ? '>' : '<'), entry.text);
@@ -322,6 +340,52 @@
      * produces a valid reading, and only a protocol that depends on one — an
      * unattended AOBP average, say — can say which.
      */
+    /**
+     * Read the device again, and let it go if it is no longer usable.
+     *
+     * Same answer connect() would give, at the only other moment the question
+     * can change. A device that has restarted into a mode this project does not
+     * accept is released rather than kept: keeping it would leave a live Measure
+     * button attached to the wrong protocol, and releasing it puts Connect back
+     * where the operator can act.
+     */
+    async function recheckAfterRestart() {
+      console.log('[BP+] the device restarted; reading it again');
+
+      try {
+        features = await device.readFeatures();
+        apiVersion = await device.readApiVersion().catch(function () { return null; });
+      } catch (error) {
+        console.warn('[BP+] could not read the device after its restart:', error.message);
+        return;
+      }
+
+      showDeviceInfo();
+
+      var shortfall = modeShortfall();
+      if (!shortfall) {
+        setStatus('success', 'BP+ restarted and is ready. Press Measure when the cuff is on.');
+        updateButtons();
+        return;
+      }
+
+      await Promise.race([
+        device.disconnect().catch(function () { /* already gone */ }),
+        new Promise(function (resolve) { setTimeout(resolve, 4000); }),
+      ]);
+
+      device = null;
+      features = null;
+
+      if (ui.connect) {
+        ui.connect.style.display = '';
+        setEnabled(ui.connect, true);
+      }
+
+      setStatus('error', shortfall);
+      updateButtons();
+    }
+
     function modeShortfall() {
       var want = config().requiredMode;
       if (want === null || want === undefined || want === '') return null;
