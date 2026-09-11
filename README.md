@@ -2,7 +2,7 @@
 
 REDCap external modules and supporting artefacts for the **Uscom BP+**, a
 suprasystolic blood-pressure device that reports central as well as brachial
-pressures.
+pressures and several pulse wave analysis measures.
 
 Everything here is an **example**. It is written to be copied, edited and made
 your own — a study that forks it and changes the field names is using it
@@ -21,9 +21,6 @@ module unmodified, and shows every field as REDCap would save it:
 Choose **Simulator** and it needs no device at all. Choose **Real BP+** and it
 drives one over the cable, from Chrome or Edge on a desktop or an Android
 tablet.
-
-That page is the honest way to answer "will this work for my study" before
-asking a REDCap administrator for anything.
 
 ---
 
@@ -74,15 +71,15 @@ different fields edits one file.
 | | |
 |---|---|
 | REDCap | External Modules framework version 15 |
-| Browser | **Chrome or Edge.** Firefox and Safari implement none of the device APIs, and neither does anything on iOS |
+| Browser | **Chrome or Edge.** On iOS you can use BlueSky and Bluetooth dongle |
 | Page | **HTTPS.** The browser refuses device access on an insecure origin |
 | Device | A Uscom BP+ on a USB cable |
 
 Desktop and Android tablets both work, by different routes — WebSerial on the
 desktop, WebUSB on Android, chosen by the SDK rather than by the module. On
-Android the cable must be a Prolific PL2303, because that is the only driver the
-SDK ships; on a desktop the operating system supplies the driver and any adapter
-works. See [docs/troubleshooting.md](docs/troubleshooting.md), which has the
+Android the cable must be a Prolific PL2303. Other cables on request. On a 
+desktop the operating system supplies the driver and any adapter works. 
+See [docs/troubleshooting.md](docs/troubleshooting.md), which has the
 measurements behind that.
 
 ---
@@ -101,12 +98,10 @@ measurements behind that.
 
 ## The SDK
 
-`modules/*/sdk/` is a **vendored copy** of
+`modules/*/sdk/` is a **copy** of
 [bpplus-js-sdk](https://github.com/uscom/bpplus-js-sdk), pinned by
 `sdk/SDK-VERSION.json` — which records the upstream commit and a hash of the
-folder. REDCap serves only a module's own directory, so the copy has to be
-physically there; a submodule or an npm dependency changes where it comes from,
-not whether it is present.
+folder. 
 
 Do not edit `sdk/` in place. `tools/sync-sdk.ps1` replaces the folder and
 rewrites the provenance. An edit made in one copy and nowhere else is invisible
