@@ -27,7 +27,7 @@ as a file.
 | | |
 |---|---|
 | REDCap | External Modules framework version 15 |
-| Browser | **Chrome or Edge.** Firefox, Safari and everything on iOS implement none of the device APIs |
+| Browser | **Chrome or Edge.** On iOS could ue BlueSky and a Bluetooth dongle on the BP+ |
 | Page | **HTTPS** — the browser refuses device access on an insecure origin |
 | Device | A Uscom BP+ on a USB cable |
 
