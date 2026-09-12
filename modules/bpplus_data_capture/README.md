@@ -65,6 +65,7 @@ which of these an administrator has to do and which a project owner can.
 | Allow a measurement started on the device itself | off | **Leave it off** — see below |
 | AOBP timings, seated and standing | *(device default)* | See **AOBP** |
 | Show warnings from attempts the device recovered from | off | See **A warning on a measurement that worked** |
+| Log every recording that is filed | off | One module-log entry per stored recording. Refusals and failures are logged either way |
 | Log every serial line to the browser console | off | Troubleshooting only |
 | **TESTING ONLY** -- simulated BP+ | off | See **Testing without a device** |
 
@@ -452,6 +453,27 @@ against instance 1.
 `auth-ajax-actions`. An action must be declared for the context it is called
 from, and a survey respondent is not a logged-in user; undeclared, the framework
 refuses the call and the recording is never filed.
+
+That context reaches the logging too. From framework version 11 the framework
+refuses `log()` from an unauthenticated context unless `config.json` sets
+`enable-no-auth-logging`, so without it the module has no account of itself on
+the page it is mostly used on. It is a capability and not a policy: it is read
+from the installed version's `config.json`, and nothing in the Control Center or
+a project can change it. What is written is the **Log every recording that is
+filed** setting instead, which is off by default and covers only the successes.
+A refusal or a failure is logged whatever the project says, because that is the
+only account of why filing stopped.
+
+Nothing a caller wrote reaches the log. Every value is a literal in the module
+or one of the context parameters the framework supplies, which the hook
+documentation says can be trusted when set.
+
+Logging is also the least important thing the endpoint does, and it is wrapped
+so that it cannot become the reply. The call on the success path runs after the
+file is stored and attached and before the doc id goes back to the page — and a
+page that never receives the doc id posts the form's rendered emptiness over the
+file, which is how REDCap deletes an edoc. A log line is worth less than a
+measurement.
 
 ### What the text field holds
 

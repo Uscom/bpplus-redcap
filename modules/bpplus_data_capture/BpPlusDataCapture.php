@@ -174,7 +174,7 @@ class BpPlusDataCapture extends AbstractExternalModule
         // the framework ever supplies this differently the symptom is that
         // filing stops entirely, and the log is what says why in one look.
         if ($instrument !== $this->captureInstrument()) {
-            $this->log('BP+ recording refused', [
+            $this->logSafely('BP+ recording refused', [
                 'reason'     => 'not the capture instrument',
                 'instrument' => (string) $instrument,
                 'record'     => (string) $record,
@@ -209,7 +209,7 @@ class BpPlusDataCapture extends AbstractExternalModule
         // participant who has already been measured.
         $limit = $this->maxRecordingBytes();
         if (strlen($xml) > $limit) {
-            $this->log('BP+ recording refused', [
+            $this->logSafely('BP+ recording refused', [
                 'reason' => 'over the size limit',
                 'record' => (string) $record,
                 'bytes'  => strlen($xml),
@@ -244,7 +244,7 @@ class BpPlusDataCapture extends AbstractExternalModule
         // request, unlike the edoc it becomes.
         $tmp = tempnam($this->tempDir(), 'bpplus_');
         if ($tmp === false || file_put_contents($tmp, $xml) === false) {
-            $this->log('BP+ recording failed', [
+            $this->logSafely('BP+ recording failed', [
                 'record' => $record, 'instance' => $repeat_instance, 'field' => $field,
                 'message' => 'the server could not write a temporary file',
             ]);
@@ -284,7 +284,7 @@ class BpPlusDataCapture extends AbstractExternalModule
                 );
             }
         } catch (Throwable $e) {
-            $this->log('BP+ recording failed', [
+            $this->logSafely('BP+ recording failed', [
                 'record'   => $record,
                 'instance' => $repeat_instance,
                 'field'    => $field,
@@ -295,13 +295,21 @@ class BpPlusDataCapture extends AbstractExternalModule
             @unlink($tmp);
         }
 
-        $this->log('BP+ recording stored', [
-            'record'   => $record,
-            'instance' => $repeat_instance,
-            'field'    => $field,
-            'doc_id'   => $docId,
-            'bytes'    => strlen($xml),
-        ]);
+        // Off unless the project asks for it. A refusal or a failure is logged
+        // either way -- those are the only account of why filing stopped -- but
+        // a success adds a row per measurement and says nothing the record does
+        // not already show, on an endpoint someone who is not logged in can
+        // reach. A project reconciling what was filed against what was measured
+        // turns it on.
+        if ($this->getProjectSetting('log-every-recording')) {
+            $this->logSafely('BP+ recording stored', [
+                'record'   => $record,
+                'instance' => $repeat_instance,
+                'field'    => $field,
+                'doc_id'   => $docId,
+                'bytes'    => strlen($xml),
+            ]);
+        }
 
         return [
             'status'   => 'saved',
@@ -311,6 +319,35 @@ class BpPlusDataCapture extends AbstractExternalModule
             'bytes'    => strlen($xml),
             'sha256'   => hash('sha256', $xml),
         ];
+    }
+
+    /**
+     * Log, without letting the logging decide whether a measurement was filed.
+     *
+     * The framework refuses log() from an unauthenticated context unless
+     * config.json sets enable-no-auth-logging, and a survey respondent is
+     * exactly that context. Whether a refusal returns quietly or throws is the
+     * framework's business. What matters here is where this gets called from:
+     * once on the path that has already stored the file and is about to hand
+     * the page its doc id, and once inside a catch block that is carrying the
+     * only description of what went wrong.
+     *
+     * A page that does not receive that doc id posts the form's rendered
+     * emptiness back over the file it was never told about, and an empty file
+     * field is how REDCap deletes an edoc. So a measurement can be stored,
+     * attached, reported as failed and then removed on the next submit --
+     * because a log line could not be written.
+     *
+     * A log line is worth less than a measurement. Failures go to the PHP error
+     * log, which needs nothing from REDCap to accept them.
+     */
+    private function logSafely(string $message, array $params = []): void
+    {
+        try {
+            $this->log($message, $params);
+        } catch (Throwable $e) {
+            error_log('BP+ Data Capture could not log "' . $message . '": ' . $e->getMessage());
+        }
     }
 
     /** Somewhere to put the bytes for the length of one request. */

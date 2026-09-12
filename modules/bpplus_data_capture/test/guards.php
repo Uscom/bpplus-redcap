@@ -25,6 +25,12 @@ abstract class AbstractExternalModule
     public array $settings = [];
     public array $logged = [];
 
+    /**
+     * Set when a test wants logging to refuse the way the framework does from
+     * an unauthenticated context with enable-no-auth-logging unset.
+     */
+    public bool $logThrows = false;
+
     public function getProjectSetting($key)
     {
         return $this->settings[$key] ?? null;
@@ -32,6 +38,9 @@ abstract class AbstractExternalModule
 
     public function log($message, $params = [])
     {
+        if ($this->logThrows) {
+            throw new \Exception('logging is not allowed in this context');
+        }
         $this->logged[] = ['message' => $message, 'params' => $params];
         return 1;
     }
@@ -103,10 +112,12 @@ function check(string $what, bool $ok, string $detail = ''): void
 }
 
 /** One call to the endpoint, with the module configured as given. */
-function call($xml, array $settings = [], string $instrument = 'bpplus_measurement', $record = 'REC-1'): array
+function call($xml, array $settings = [], string $instrument = 'bpplus_measurement', $record = 'REC-1',
+              bool $logThrows = false): array
 {
     $module = new BpPlusDataCapture();
     $module->settings = $settings + ['save-xml-file' => true];
+    $module->logThrows = $logThrows;
 
     $reply = $module->redcap_module_ajax(
         'save-xml', ['xml' => $xml], 1, $record, $instrument,
@@ -278,6 +289,65 @@ $out = call(result(1000));
 check('a file that does not attach is an error', ($out['reply']['status'] ?? '') === 'error');
 check('and the message names the field to check',
     strpos($out['reply']['message'] ?? '', 'bpplus_xml') !== false);
+REDCap::$attachFails = false;
+
+// -- What gets logged --------------------------------------------------------
+// A refusal or a failure is the only account of why filing stopped, so it is
+// written whatever the project says. A success is a row per measurement on an
+// endpoint someone who is not logged in can reach, so a project asks for it.
+
+heading('logging follows the project, except where it must not');
+
+$out = call(result(1000));
+check('a stored recording is not logged by default',
+    count($out['logged']) === 0, json_encode($out['logged']));
+
+$out = call(result(1000), ['log-every-recording' => true]);
+check('and is logged when the project asks for it',
+    count($out['logged']) === 1 && ($out['logged'][0]['message'] ?? '') === 'BP+ recording stored',
+    json_encode($out['logged']));
+check('naming the document it was filed as',
+    !empty($out['logged'][0]['params']['doc_id']));
+
+$out = call(result(1000), [], 'some_other_form');
+check('a refusal is logged with the setting off', count($out['logged']) === 1,
+    json_encode($out['logged']));
+
+REDCap::$attachFails = true;
+$out = call(result(1000));
+check('a failure is logged with the setting off',
+    count($out['logged']) === 1 && ($out['logged'][0]['message'] ?? '') === 'BP+ recording failed',
+    json_encode($out['logged']));
+REDCap::$attachFails = false;
+
+// -- Logging ---------------------------------------------------------------
+// The framework refuses log() from an unauthenticated context unless
+// config.json sets enable-no-auth-logging, and a survey respondent is exactly
+// that context. Logging is the least important thing this endpoint does, so a
+// refusal must cost a log line and nothing else. The reply matters most on the
+// success path: the page needs the doc id, and a form that never receives one
+// clears the field on the next submit.
+
+heading('a log that cannot be written costs nothing else');
+
+$out = call(result(5000), ['log-every-recording' => true], 'bpplus_measurement', 'REC-1', true);
+check('a stored recording is still reported as stored',
+    ($out['reply']['status'] ?? '') === 'saved', json_encode($out['reply']));
+check('and the doc id the form needs still comes back', !empty($out['reply']['doc_id']));
+
+$out = call(result(1000), [], 'some_other_form', 'REC-1', true);
+check('a refusal is still a refusal', ($out['reply']['status'] ?? '') === 'error');
+
+$out = call(result(2 * 1024 * 1024), [], 'bpplus_measurement', 'REC-1', true);
+check('an oversized recording is still refused', ($out['reply']['status'] ?? '') === 'error');
+
+// The log call on this path sits INSIDE the catch block, holding the only
+// description of what went wrong.
+REDCap::$attachFails = true;
+$out = call(result(1000), [], 'bpplus_measurement', 'REC-1', true);
+check('a failure still names the field to check',
+    strpos($out['reply']['message'] ?? '', 'bpplus_xml') !== false,
+    json_encode($out['reply']));
 REDCap::$attachFails = false;
 
 check('nothing was left in the temporary directory',

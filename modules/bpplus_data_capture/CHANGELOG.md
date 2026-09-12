@@ -1,4 +1,4 @@
-# Changelog — BP+ Data Capture
+# Changelog -- BP+ Data Capture
 
 Read this before moving a project that is already collecting data. See
 [docs/versioning.md](../../docs/versioning.md) for how a long study pins a
@@ -6,6 +6,45 @@ version and stays on it.
 
 The version here must match the directory name REDCap installs it as, and the
 release tag. The release workflow refuses a tag that disagrees.
+
+## 2.0.2 — 2026-09-12
+
+Logging, on three points: the module can log from a survey, a project chooses
+whether successes are logged, and logging cannot affect whether a recording is
+filed. An existing project needs no change.
+
+### The module logs from a survey
+
+From framework version 11 the framework refuses `log()` in an unauthenticated
+context unless `config.json` sets `enable-no-auth-logging`, and a survey
+respondent is that context. `config.json` sets it, so the module's account of a
+refusal or a failure is written from a survey as well as from a data-entry form.
+
+It is a capability and not a policy. The framework reads it from the installed
+version's `config.json`, so it cannot be turned on from the Control Center or
+from a project; what is logged is the setting below.
+
+Nothing a caller wrote reaches the log. Every value is a literal in the module
+or one of the context parameters the framework supplies.
+
+### New setting: Log every recording that is filed
+
+Off by default. On, the module writes one entry for each stored recording,
+naming the record, the instance and the document -- which is what reconciles the
+module log against an export. Off, that entry is not written: the file is
+already on the record, so it says nothing new, and it is a row per measurement
+on an endpoint someone who is not logged in can reach.
+
+**A refusal or a failure is logged either way**, whatever this setting says.
+Those are the only account of why filing stopped, and a diagnostic that has to
+be switched on before the fault happens again is worth much less than one that
+was already running.
+
+### Logging cannot cost a measurement
+
+Every log call in the endpoint is wrapped. One that cannot be written goes to
+the PHP error log and the endpoint carries on, so the reply the page depends on
+is never a log's to withhold. A log line is worth less than a measurement.
 
 ## 2.0.1 — 2026-09-08
 

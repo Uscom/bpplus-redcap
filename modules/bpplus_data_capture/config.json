@@ -2,7 +2,7 @@
   "name": "BP+ Data Capture",
   "namespace": "Uscom\\BpPlusDataCapture",
   "description": "Records a blood-pressure measurement from a Uscom BP+ device directly into a REDCap instrument, and keeps the device's own result XML as a file on the record. An example module, meant to be copied and edited.",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "documentation": "README.md",
   "authors": [
     {
@@ -29,6 +29,19 @@
   "auth-ajax-actions": [
     "save-xml"
   ],
+  "$comment-logging": [
+    "A capability, not a policy. From framework version 11 the framework",
+    "refuses log() from an unauthenticated context unless this is set, and a",
+    "survey respondent is that context -- so without it the module has no",
+    "account of itself on the page it is mostly used on.",
+    "It cannot be changed from the Control Center or a project: the framework",
+    "reads it from the installed version's config.json. What is logged is the",
+    "log-every-recording setting instead.",
+    "Nothing a caller wrote reaches the log. Every value is either a literal",
+    "in the module or a context parameter the framework supplies, which the",
+    "hook documentation says can be trusted when set."
+  ],
+  "enable-no-auth-logging": true,
   "enable-every-page-hooks-on-system-pages": false,
   "project-settings": [
     {
@@ -406,6 +419,11 @@
     {
       "key": "show-recovered-warnings",
       "name": "<b>Show warnings from attempts the device recovered from</b><br>The BP+ may automatically retry a measurement and include an alert in the xml result. A retry may subsequently succeed. Turn ON if you want to see the warnings on measurements that succeeded after the retry. The alerts are recorded in the XML even when not displayed.",
+      "type": "checkbox"
+    },
+    {
+      "key": "log-every-recording",
+      "name": "<b>Log every recording that is filed</b><br>Adds one entry to the module log each time a recording is stored, naming the record, the instance and the document. Off for normal use: the file is already on the record, so this says nothing new and grows with the number of measurements. Turn it on to reconcile what was filed against what was measured. <b>A refusal or a failure is logged either way</b> &mdash; those are the only account of why filing stopped, and are not affected by this setting.",
       "type": "checkbox"
     },
     {

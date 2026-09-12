@@ -615,6 +615,24 @@ console.log('\nan AOBP measurement knows which posture it is');
     const indifferent = await afterRestart(5, 0, undefined);
     check('a project that requires no mode is undisturbed by a restart',
       indifferent.measure && indifferent.stillOpen === 1);
+
+    // BP+ mode is 0, and 0 is falsy. A requirement of "any" is the empty
+    // string, so the two have to be told apart by identity: a check written as
+    // a truth test would skip a project that requires BP+ and accept a device
+    // in any mode at all.
+    const bpplusKept = await afterRestart(0, 0, 0);
+    check('a project that requires BP+ mode accepts a BP+ in it',
+      bpplusKept.measure && bpplusKept.stillOpen === 1,
+      JSON.stringify(bpplusKept).slice(0, 90));
+
+    // Refused at connect, so the status has already gone back to the Connect
+    // prompt -- what says the requirement was honoured is that Measure never
+    // became available and the port was given back. Ignoring the zero would
+    // leave this connected and measurable.
+    const bpplusRefused = await afterRestart(5, 5, 0);
+    check('and refuses a device in another mode rather than ignoring the zero',
+      !bpplusRefused.measure && bpplusRefused.stillOpen === 0 && bpplusRefused.connectShown,
+      JSON.stringify(bpplusRefused).slice(0, 90));
   }
 
   // Connecting when already connected built a second device and dropped the
