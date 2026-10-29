@@ -354,8 +354,14 @@ console.log('\nthe harness can exercise the resume');
 // The same, by running it. A browser with only Web Bluetooth -- Bluefy on an
 // iPad -- must get the bridge picker from Connect and never from the resume.
 // The SDK reads the navigator of the realm it was imported into, which here is
-// Node's, so that is the one given a Bluetooth API.
+// Node's, so that is the one given a Bluetooth API. Node has a global navigator
+// from version 21 only; on an older one this supplies an empty one.
 if (JSDOM) {
+  const nodeHadNavigator = typeof globalThis.navigator !== 'undefined';
+  if (!nodeHadNavigator) {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+  }
+
   const sdkUrl = new URL('../sdk/index.js', import.meta.url).href;
   const w = new JSDOM(`<!doctype html><html><body>
     <button id="bpplus-connect"></button><button id="bpplus-measure"></button>
@@ -390,7 +396,8 @@ if (JSDOM) {
       asked === 1 && /over Bluetooth/.test(failure?.message || ''),
       'requestDevice() called ' + asked + ' times; ' + failure?.message);
   } finally {
-    delete globalThis.navigator.bluetooth;
+    if (nodeHadNavigator) delete globalThis.navigator.bluetooth;
+    else delete globalThis.navigator;
   }
 }
 
