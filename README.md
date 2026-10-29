@@ -60,9 +60,9 @@ measurement can happen in PHP.
 
 The **SDK owns the device** — framing, checksums, result codes, timeouts,
 transports. The **module owns REDCap** — which fields, which buttons, what the
-operator is told. That line is why a new transport (WebUSB today, whatever
-follows) lands in the SDK and changes no module, and why a study that wants
-different fields edits one file.
+operator is told. That line is why a new transport (WebUSB, Bluetooth, whatever
+follows) is written once, in the SDK, and a module only has to construct it, and
+why a study that wants different fields edits one file.
 
 ---
 
@@ -71,12 +71,15 @@ different fields edits one file.
 | | |
 |---|---|
 | REDCap | External Modules framework version 15 |
-| Browser | **Chrome or Edge.** On iOS you can use BlueSky and Bluetooth dongle |
+| Browser | **Chrome or Edge.** On an iPad or iPhone, **Bluefy** with a Bluetooth bridge |
 | Page | **HTTPS.** The browser refuses device access on an insecure origin |
-| Device | A Uscom BP+ on a USB cable |
+| Device | A Uscom BP+ on a USB cable, or with a Bluetooth bridge on its serial port |
 
 Desktop and Android tablets both work, by different routes — WebSerial on the
-desktop, WebUSB on Android, chosen by the SDK rather than by the module. On
+desktop, WebUSB on Android, chosen by the SDK rather than by the module. On iOS,
+where no browser has either, Bluefy reaches the BP+ over Bluetooth through a
+BLE-to-serial bridge, and the operator chooses the bridge again on each survey
+page. On
 Android the cable must be a Prolific PL2303. Other cables on request. On a 
 desktop the operating system supplies the driver and any adapter works. 
 See [docs/troubleshooting.md](docs/troubleshooting.md), which has the

@@ -61,12 +61,14 @@ device's result file, add a **File Upload** field named `<prefix>xml` and tick
 
 ## Before the first participant
 
-**Check HTTPS.** The browser refuses `navigator.serial` and `navigator.usb` on
-an insecure origin, and the failure is a picker that never appears rather than an
-error message. A REDCap on plain HTTP cannot run this module at all.
+**Check HTTPS.** The browser refuses `navigator.serial`, `navigator.usb` and
+`navigator.bluetooth` on an insecure origin, and the failure is a picker that
+never appears rather than an error message. A REDCap on plain HTTP cannot run
+this module at all.
 
 **Check the browser.** Chrome or Edge. Firefox and Safari implement none of the
-device APIs, and neither does anything on iOS — including Chrome on iOS, which is
+device APIs. On iOS, Bluefy reaches the BP+ over Bluetooth through a bridge on
+its serial port; no other iOS browser can, Chrome on iOS included, because it is
 Safari underneath.
 
 **Take a measurement on a test record.** Watch the browser console (F12). The

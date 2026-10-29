@@ -11,7 +11,7 @@ module version alone does not identify the code that talked to the device.
 
 | Module | Version | SDK | Terminal API | BP+ software | REDCap framework |
 |---|---|---|---|---|---|
-| `bpplus_data_capture` | 2.0.0 | 1.3.0 (`v1.3.0`) | 2.4 | 5.3.0.0 series | 15 |
+| `bpplus_data_capture` | 2.0.0 to 2.1.0 | 1.3.0 (`v1.3.0`) | 2.4 | 5.3.0.0 series | 15 |
 
 The SDK column names the tag a copy is pinned to. The authoritative statement for
 an installed copy is its own `sdk/SDK-VERSION.json`, which records the tag, the
@@ -55,18 +55,25 @@ the strength of a string.
 
 ## Browsers
 
-| | Web Serial | WebUSB | Works |
-|---|---|---|---|
-| Chrome / Edge, desktop | yes | yes | yes, over Web Serial |
-| Chrome, Android | reports yes, but see below | yes | yes, over **WebUSB** |
-| Firefox, any | no | no | no |
-| Safari, any | no | no | no |
-| Anything on iOS | no | no | no |
+| | Web Serial | WebUSB | Web Bluetooth | Works |
+|---|---|---|---|---|
+| Chrome / Edge, desktop | yes | yes | yes | yes, over Web Serial |
+| Chrome, Android | reports yes, but see below | yes | yes | yes, over **WebUSB** |
+| Bluefy, iOS | no | no | yes | yes, over **Bluetooth**, with a bridge (module 2.1.0 and later) |
+| Firefox, any | no | no | no | no |
+| Safari, any | no | no | no | no |
+| Any other browser on iOS | no | no | no | no |
 
 On Android, Web Serial exists but enumerates Bluetooth SPP devices rather than
 the cable. The SDK chooses WebUSB there for that reason, and the cable must be a
 Prolific PL2303 because that is the only driver the SDK ships. See
 [troubleshooting.md](troubleshooting.md) for the measurements.
+
+On iOS every browser is Safari underneath. Bluefy adds Web Bluetooth and nothing
+else, so the BP+ needs a BLE-to-serial bridge on its serial port; the bridges the
+SDK recognises are the `BLE_PROFILES` in `sdk/transports/web-bluetooth.js`.
+Bluetooth is chosen only when a browser has neither Web Serial nor WebUSB, so a
+desktop or an Android tablet uses the cable even with a bridge fitted.
 
 Every route needs a **secure context** — HTTPS or `localhost`. There is no
 exception and no flag.

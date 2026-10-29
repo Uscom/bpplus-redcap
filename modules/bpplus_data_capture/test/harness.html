@@ -177,7 +177,7 @@
         <label for="transport">Device</label>
         <select id="transport">
           <option value="sim">Simulator &mdash; no hardware needed</option>
-          <option value="real">Real BP+ on a cable</option>
+          <option value="real">Real BP+, on a cable or Bluetooth</option>
         </select>
       </div>
       <div id="scenario-wrap">
@@ -650,8 +650,16 @@ window.BPPLUS_TRANSPORT = function (api, options) {
       ? { scenario: settings.scenario, measureMode: api.MeasureMode.bpPlusAobp }
       : { scenario: settings.scenario });
   }
+  // The same choice the module makes, transport for transport. A hook that
+  // chose differently would test a connection REDCap never makes.
   const pick = api.recommendedTransport();
   if (pick.kind === api.TransportKind.usbSerial) return new api.UsbSerialTransport({ silent });
+  if (pick.kind === api.TransportKind.bluetooth) {
+    // Refused for a resume, as the module refuses it: the Bluetooth transport
+    // always calls requestDevice(), which is the picker.
+    if (silent) throw new Error('a Bluetooth bridge cannot be reopened without the picker');
+    return new api.WebBluetoothTransport();
+  }
   return new api.WebSerialTransport({ filters: null, silent });
 };
 

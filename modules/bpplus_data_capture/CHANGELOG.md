@@ -7,6 +7,33 @@ version and stays on it.
 The version here must match the directory name REDCap installs it as, and the
 release tag. The release workflow refuses a tag that disagrees.
 
+## 2.1.0 — 2026-10-30
+
+### Bluetooth, for iPads and iPhones
+
+A browser whose only device API is Web Bluetooth now connects to the BP+ over
+Bluetooth, through a BLE-to-serial bridge on its serial port. On iOS that browser
+is Bluefy. Connect opens the browser's Bluetooth picker, and the measurement,
+the fields and the filed recording are the same as over a cable.
+
+The choice is the SDK's `recommendedTransport()`, as before. Bluetooth is chosen
+only when the browser has neither Web Serial nor WebUSB, so a desktop or an
+Android tablet goes on using the cable even with a bridge fitted. An existing
+project needs no change.
+
+### Bluetooth does not reconnect across survey pages
+
+A cable is picked back up silently when a survey page changes. The Bluetooth
+transport has no silent mode -- opening it always shows the picker -- so the
+module does not attempt it, and the operator chooses the bridge again on each
+page. The console notes it as `nothing to resume`.
+
+### The test harness
+
+**Real BP+** now takes the same route the module does, Bluetooth included, and
+`test/smoke.mjs` checks that a browser with only Web Bluetooth gets the picker
+from Connect and never from the resume.
+
 ## 2.0.2 — 2026-09-12
 
 Logging, on three points: the module can log from a survey, a project chooses

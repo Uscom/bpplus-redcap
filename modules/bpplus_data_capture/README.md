@@ -27,9 +27,29 @@ as a file.
 | | |
 |---|---|
 | REDCap | External Modules framework version 15 |
-| Browser | **Chrome or Edge.** On iOS could ue BlueSky and a Bluetooth dongle on the BP+ |
+| Browser | **Chrome or Edge.** On an iPad or iPhone, **Bluefy** — see **Bluetooth** |
 | Page | **HTTPS** — the browser refuses device access on an insecure origin |
-| Device | A Uscom BP+ on a USB cable |
+| Device | A Uscom BP+ on a USB cable, or with a Bluetooth bridge on its serial port |
+
+### Bluetooth
+
+Every browser on iOS is Safari underneath, and none of them implements Web Serial
+or WebUSB. Bluefy adds Web Bluetooth, which reaches a BP+ through a BLE-to-serial
+bridge on its serial port. The SDK chooses Bluetooth when it is the only device
+API the browser has, and Connect then opens the browser's Bluetooth picker
+instead of a port picker.
+
+The bridges the SDK recognises are the `BLE_PROFILES` in
+`sdk/transports/web-bluetooth.js`: the BP+ Bridge (Nordic UART service,
+advertising as `BP+ Bridge`), the uConnect S2B5232I, the Microchip RN4870, and
+HM-10 modules and their clones.
+
+Two differences from a cable:
+
+- **The bridge is chosen again on every survey page.** See **Reconnecting across
+  a multi-page survey**.
+- **Bluetooth is the route of last resort.** A browser with Web Serial or WebUSB
+  uses the cable, even with a bridge fitted.
 
 ---
 
@@ -530,10 +550,21 @@ needs. Only the console mentions it:
 It resumes only when the choice is unambiguous. More than one granted port and
 the SDK refuses, because the right one is not knowable from a list.
 
+**Bluetooth does not resume.** The SDK's Bluetooth transport has no silent
+option: opening it always calls `requestDevice()`, which is the picker. The
+module therefore refuses a silent Bluetooth request rather than put a picker up
+with no click behind it, and on a survey of several pages the operator chooses
+the bridge once per page. The console says so:
+
+```
+[BP+] nothing to resume (a Bluetooth bridge cannot be reopened without the picker)
+```
+
 #### Testing it, and the trap underneath
 
 `window.BPPLUS_TRANSPORT` takes **`(api, options)`** and must pass
-`options.silent` into every transport it constructs. A hook that takes only
+`options.silent` into every cable transport it constructs, and refuse a silent
+request for Bluetooth the way the module does. A hook that takes only
 `(api)` sends the resume to the picker, the browser refuses it for want of a user
 gesture, and the feature looks broken on the bench while working in REDCap —
 which is the worst way for a test rig to be wrong. `test/smoke.mjs` reads both

@@ -413,9 +413,11 @@
      * A desktop gets Web Serial. An Android tablet reaches the same USB cable
      * through WebUSB instead — the operator sees no difference, and hard-coding
      * Web Serial here would simply refuse to connect on a tablet even though
-     * navigator.serial exists there. No platform logic lives in this file: the
-     * SDK decides, and the note at the top of sdk/transports/detect.js carries
-     * the measurements behind that decision.
+     * navigator.serial exists there. A browser with neither, such as Bluefy on
+     * an iPad, reaches the BP+ over Bluetooth through a BLE-to-serial bridge on
+     * its serial port. No platform logic lives in this file: the SDK decides,
+     * and the note at the top of sdk/transports/detect.js carries the
+     * measurements behind that decision.
      *
      * The BPPLUS_TRANSPORT hook exists so the test harness can run this same
      * code against the SDK simulator with no device attached. REDCap never sets
@@ -460,7 +462,8 @@
       // check when a cable that works on a desktop does not work on a tablet.
       console.log('[BP+] transport: ' + pick.kind + ' — ' + pick.reason +
                   ' (android=' + env.android + ' handheld=' + env.handheld +
-                  ' webSerial=' + env.webSerial + ')');
+                  ' webSerial=' + env.webSerial + ' webUsb=' + env.webUsb +
+                  ' webBluetooth=' + env.webBluetooth + ')');
 
       if (pick.kind === api.TransportKind.serial) {
         return new api.WebSerialTransport({ filters: PORT_FILTERS, silent: silent });
@@ -468,10 +471,19 @@
       if (pick.kind === api.TransportKind.usbSerial) {
         return new api.UsbSerialTransport({ silent: silent });
       }
+      if (pick.kind === api.TransportKind.bluetooth) {
+        // Never for a resume. The Bluetooth transport has no way to reopen a
+        // bridge the browser already knows: it always calls requestDevice(),
+        // which is the picker. With no click behind it Chrome refuses, and an
+        // iOS Bluetooth browser may put the picker up unprompted on every page
+        // load. So each survey page asks for the bridge once, on Connect.
+        if (silent) {
+          throw new Error('a Bluetooth bridge cannot be reopened without the picker');
+        }
+        return new api.WebBluetoothTransport();
+      }
 
-      // Bluetooth needs the separate BP+ Bridge, which this module does not
-      // use, so anything else is reported rather than half-attempted.
-      throw new Error('This browser cannot reach a BP+ on a cable. ' + pick.reason);
+      throw new Error('This browser cannot reach a BP+. ' + pick.reason);
     }
 
     /**
@@ -1417,7 +1429,8 @@
           setStatus(shortfall ? 'error' : 'success',
                     shortfall || 'BP+ found and ready.');
         } catch (error) {
-          setStatus('error', 'No answer from the BP+. Check the cable, then try again.');
+          setStatus('error', 'No answer from the BP+. Check the cable or the ' +
+                             'Bluetooth bridge, then try again.');
           console.error('[BP+] ping failed', error);
         } finally {
           busy = false;

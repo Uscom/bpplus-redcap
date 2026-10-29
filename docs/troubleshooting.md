@@ -40,8 +40,10 @@ This browser: Web Serial yes - WebUSB yes - Bluetooth yes
 If that line says **not a secure context**, no amount of module configuration
 will help.
 
-Firefox and Safari implement none of these APIs. Neither does anything on iOS,
-Chrome for iOS included — it is Safari underneath.
+Firefox and Safari implement none of these APIs, and every browser on iOS is
+Safari underneath, Chrome included. The exception there is Bluefy, which adds
+Web Bluetooth: Connect opens a Bluetooth picker, and the BP+ needs a
+BLE-to-serial bridge on its serial port.
 
 ## The picker appears but is empty
 
@@ -50,6 +52,16 @@ port; if there isn't one, it is a driver or cable problem, not a REDCap one.
 
 **On an Android tablet**, see below — the picker you are looking at is probably
 the wrong one.
+
+**On an iPad or iPhone in Bluefy**, the picker lists Bluetooth devices, and only
+ones advertising a bridge the SDK recognises. Check the bridge is powered and is
+not still connected to another app; the BP+ Bridge advertises as `BP+ Bridge`.
+
+## Connect asks for the bridge on every survey page
+
+Expected, over Bluetooth. A cable is picked back up silently after a page
+change; the Bluetooth transport has no silent mode, so the module asks once per
+page instead of putting a picker up with no click behind it.
 
 ---
 

@@ -310,12 +310,18 @@ console.log('\nthe harness can exercise the resume');
       /function \(api, options\)/.test(body));
 
     // The simulator is excluded by name: it has no grant to resume and no
-    // picker to refuse, so the flag means nothing to it.
+    // picker to refuse, so the flag means nothing to it. Bluetooth is excluded
+    // here and checked below: it has no silent mode, so the hook refuses a
+    // silent request instead of passing a flag the transport would ignore.
     const dropped = body.split('\n').filter(line =>
-      line.includes('new api.') && !line.includes('Simulator') && !line.includes('silent'));
+      line.includes('new api.') && !line.includes('Simulator') &&
+      !line.includes('Bluetooth') && !line.includes('silent'));
 
     check('every real transport it builds is given silent',
       dropped.length === 0, dropped.map(l => l.trim()).join(' | '));
+
+    check('and a silent request is refused before a Bluetooth transport is built',
+      refusesSilentBluetooth(body));
   }
 }
 
@@ -337,6 +343,55 @@ console.log('\nthe harness can exercise the resume');
 
   check('the resume is attempted on load, and quiet when there is nothing to resume',
     /resumeConnection\(\)/.test(module) && /nothing to resume/.test(module));
+
+  // The Bluetooth transport always calls requestDevice(), which is the picker.
+  // Built for a resume, that is a picker with no click behind it on every page
+  // load.
+  check('a silent request is refused before a Bluetooth transport is built',
+    refusesSilentBluetooth(module));
+}
+
+// The same, by running it. A browser with only Web Bluetooth -- Bluefy on an
+// iPad -- must get the bridge picker from Connect and never from the resume.
+// The SDK reads the navigator of the realm it was imported into, which here is
+// Node's, so that is the one given a Bluetooth API.
+if (JSDOM) {
+  const sdkUrl = new URL('../sdk/index.js', import.meta.url).href;
+  const w = new JSDOM(`<!doctype html><html><body>
+    <button id="bpplus-connect"></button><button id="bpplus-measure"></button>
+    <div id="bpplus-status"></div>
+  </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true }).window;
+
+  let asked = 0;
+  Object.defineProperty(globalThis.navigator, 'bluetooth', {
+    configurable: true,
+    value: {
+      requestDevice: async () => {
+        asked++;
+        throw new Error('User cancelled the requestDevice() chooser.');
+      },
+    },
+  });
+
+  try {
+    w.BPPLUS_CONFIG = { record: 'R1', sdkUrl };
+    w.console.log = () => {}; w.console.warn = () => {}; w.console.error = () => {};
+    w.eval(fs.readFileSync(new URL('../js/bpplus-capture.js', import.meta.url), 'utf8'));
+    w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    const duringResume = asked;
+    let failure = null;
+    try { await w.BPPLUS.connect(); } catch (error) { failure = error; }
+
+    check('with only Web Bluetooth, the resume does not open the picker',
+      duringResume === 0, 'requestDevice() called ' + duringResume + ' times at page load');
+    check('and Connect does',
+      asked === 1 && /over Bluetooth/.test(failure?.message || ''),
+      'requestDevice() called ' + asked + ' times; ' + failure?.message);
+  } finally {
+    delete globalThis.navigator.bluetooth;
+  }
 }
 
 // -- Does the harness still simulate the submit? -------------------------------
@@ -942,6 +997,20 @@ check('the hex is kept separately',
 
 console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
 process.exit(failures ? 1 : 0);
+
+/**
+ * Whether the Bluetooth branch of a transport choice refuses a silent request
+ * before it builds anything.
+ *
+ * Read between the branch and the construction, so a refusal somewhere else in
+ * the file does not count for this one.
+ */
+function refusesSilentBluetooth(text) {
+  const branch = text.indexOf('TransportKind.bluetooth');
+  const built = text.indexOf('new api.WebBluetoothTransport(');
+  return branch >= 0 && built > branch &&
+    /if \(silent\)\s*\{?\s*throw/.test(text.slice(branch, built));
+}
 
 /**
  * The first cell of every row of a CSV, quoted cells and embedded newlines

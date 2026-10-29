@@ -64,7 +64,8 @@ outside the module:
 There is no flag and no exception.
 
 **Will the machines be Chrome or Edge?** Firefox and Safari implement none of the
-device APIs, and neither does anything on iOS.
+device APIs. On an iPad or iPhone the browser has to be Bluefy, and the BP+ needs
+a Bluetooth bridge on its serial port.
 
 **Who installs external modules?** At many sites this is a request with a queue
 attached. Worth finding out early — it is usually the longest lead time in the
