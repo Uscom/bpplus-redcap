@@ -139,39 +139,41 @@ export function recommendedTransport(environment = describeEnvironment()) {
 }
 
 /**
- * Android, by any signal that says so.
+ * Android, on positive evidence only.
  *
  * Every check is positive-only, and a negative from one never short-circuits
- * the next. The previous version returned on `userAgentData.platform`:
+ * the next. Chrome's "Desktop site" mode — the default on some Samsung tablets —
+ * reports `userAgentData.platform` as "Linux" and leaves "Android" out of the
+ * user-agent string, so a check that returned on either would answer "not
+ * Android" on a Galaxy Tab S10 FE and on a Galaxy S23 Ultra.
  *
- *   if (typeof platform === 'string' && platform) return /android/i.test(platform);
- *   return /android/i.test(nav.userAgent || '');   // dead whenever platform is set
+ * What desktop-site mode leaves is Linux on a touch screen with a coarse
+ * pointer, and that pair is the last check. Linux, and not touch alone: an iPad
+ * or an iPhone is a handheld too, and reports a Mac or iOS user agent, never
+ * Linux; a Chromebook in tablet mode reports Chrome OS. Touch alone would put
+ * "Android" on screen for each of them.
  *
- * which made the UA-string line unreachable in exactly the case it was written
- * for. Chrome's "Desktop site" mode — the default on some Samsung tablets —
- * reports platform "Linux", so that check answered "not Android" on a Galaxy
- * Tab S10 FE and on a Galaxy S23 Ultra. Both then took the Web Serial path
- * that cannot see the cable.
+ * No transport choice rests on this. recommendedTransport() sends a handheld to
+ * WebUSB whatever this says, so it decides a label and nothing else.
  */
 function isAndroid(nav) {
   if (!nav) return false;
 
   const data = nav.userAgentData;
-  if (data && typeof data.platform === 'string' && /android/i.test(data.platform)) {
-    return true;
-  }
-  if (/android/i.test(nav.userAgent || '')) return true;
+  const platform = data && typeof data.platform === 'string' ? data.platform : '';
+  const userAgent = nav.userAgent || '';
 
-  // Desktop-site mode rewrites both of the above. What it cannot rewrite is the
-  // hardware: a touch screen whose primary pointer is coarse is a handheld.
-  return isHandheld(nav);
+  if (/android/i.test(platform) || /android/i.test(userAgent)) return true;
+
+  return (/linux/i.test(platform) || /linux/i.test(userAgent)) && isHandheld(nav);
 }
 
 /**
  * A phone or tablet, whatever the user-agent claims to be.
  *
- * This is the last resort in `isAndroid()` and the reason desktop-site mode no
- * longer defeats it. A desktop reports no touch points; a touch laptop reports
+ * What recommendedTransport() routes a tablet on, because it is the one signal
+ * desktop-site mode cannot rewrite, and half of the last check in
+ * `isAndroid()`. A desktop reports no touch points; a touch laptop reports
  * touch AND a fine pointer, and stays on Web Serial, which is the route that
  * works there.
  *

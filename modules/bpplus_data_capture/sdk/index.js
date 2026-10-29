@@ -136,7 +136,7 @@ export {
 } from './core/commands.js';
 
 /** SDK version, independent of the application's. */
-export const SDK_VERSION = '1.3.0';
+export const SDK_VERSION = '1.3.1';
 
 /** The Terminal API version this SDK is written against. */
 export const TERMINAL_API_VERSION = '2.4';

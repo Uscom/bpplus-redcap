@@ -7,6 +7,15 @@ version and stays on it.
 The version here must match the directory name REDCap installs it as, and the
 release tag. The release workflow refuses a tag that disagrees.
 
+## 2.1.1 — 2026-10-30
+
+SDK 1.3.1, which reports Android only on positive evidence: an iPad, an iPhone
+or a Chromebook is no longer described as Android in the console or on the test
+harness. No transport choice changes, and nothing else in the module does.
+
+This release replaces 2.1.0, which has been withdrawn. Everything listed under
+2.1.0 below is in it.
+
 ## 2.1.0 — 2026-10-30
 
 ### Bluetooth, for iPads and iPhones

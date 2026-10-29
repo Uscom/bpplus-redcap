@@ -12,17 +12,17 @@
                      "  tools/sync-sdk.ps1 -Module bpplus_data_capture -Verify",
                      "The script lives in https://github.com/Uscom/bpplus-redcap, not in this repository."
                  ],
-    "sdkVersion":  "1.3.0",
+    "sdkVersion":  "1.3.1",
     "terminalApiVersion":  "2.4",
     "source":  {
                    "repository":  "https://github.com/Uscom/bpplus-js-sdk.git",
                    "path":  "sdk/",
-                   "ref":  "v1.3.0",
+                   "ref":  "v1.3.1",
                    "refKind":  "tag",
-                   "committed":  "2026-09-04T12:11:04+12:00"
+                   "committed":  "2026-10-30T12:06:21+13:00"
                },
     "vendored":  {
-                     "on":  "2026-09-04",
-                     "treeSha256":  "813a15051551bb6f68ea4f227ad9925cb5eeb7e5e2501be822cf3893d909f46c"
+                     "on":  "2026-10-30",
+                     "treeSha256":  "d4c68085cb6c884ef51d6fafc52125f7cfbfaecff5f4b5095bd628ca1f550b7f"
                  }
 }

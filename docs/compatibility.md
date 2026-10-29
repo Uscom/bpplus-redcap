@@ -11,6 +11,7 @@ module version alone does not identify the code that talked to the device.
 
 | Module | Version | SDK | Terminal API | BP+ software | REDCap framework |
 |---|---|---|---|---|---|
+| `bpplus_data_capture` | 2.1.1 | 1.3.1 (`v1.3.1`) | 2.4 | 5.3.0.0 series | 15 |
 | `bpplus_data_capture` | 2.0.0 to 2.1.0 | 1.3.0 (`v1.3.0`) | 2.4 | 5.3.0.0 series | 15 |
 
 The SDK column names the tag a copy is pinned to. The authoritative statement for
@@ -59,7 +60,7 @@ the strength of a string.
 |---|---|---|---|---|
 | Chrome / Edge, desktop | yes | yes | yes | yes, over Web Serial |
 | Chrome, Android | reports yes, but see below | yes | yes | yes, over **WebUSB** |
-| Bluefy, iOS | no | no | yes | yes, over **Bluetooth**, with a bridge (module 2.1.0 and later) |
+| Bluefy, iOS | no | no | yes | yes, over **Bluetooth**, with a bridge (module 2.1.1 and later) |
 | Firefox, any | no | no | no | no |
 | Safari, any | no | no | no | no |
 | Any other browser on iOS | no | no | no | no |
