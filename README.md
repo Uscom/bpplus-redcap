@@ -79,7 +79,9 @@ Desktop and Android tablets both work, by different routes — WebSerial on the
 desktop, WebUSB on Android, chosen by the SDK rather than by the module. On iOS,
 where no browser has either, Bluefy reaches the BP+ over Bluetooth through a
 BLE-to-serial bridge, and the operator chooses the bridge again on each survey
-page. On
+page. A desktop or an Android tablet can reach a bridge too, with the Connect by
+Bluetooth button (module 2.2.0); Connect itself always takes the cable there.
+On
 Android the cable must be a Prolific PL2303. Other cables on request. On a 
 desktop the operating system supplies the driver and any adapter works. 
 See [docs/troubleshooting.md](docs/troubleshooting.md), which has the

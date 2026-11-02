@@ -48,8 +48,11 @@ Two differences from a cable:
 
 - **The bridge is chosen again on every survey page.** See **Reconnecting across
   a multi-page survey**.
-- **Bluetooth is the route of last resort.** A browser with Web Serial or WebUSB
-  uses the cable, even with a bridge fitted.
+- **Connect puts the cable first.** A browser with Web Serial or WebUSB, such as
+  Chrome or Edge on Windows or an Android tablet, connects over the cable when
+  Connect is pressed, even with a bridge fitted. **Connect by Bluetooth** is the
+  way to the bridge from such a browser (module 2.2.0 and later). The instrument
+  has to carry the button; see **The instrument**.
 
 ---
 
@@ -100,6 +103,7 @@ Three are required:
 | Element | | Purpose |
 |---|---|---|
 | `#bpplus-connect` | required | Opens the browser's device picker |
+| `#bpplus-connect-bluetooth` | optional | Opens the Bluetooth picker where Connect would take the cable. Hidden in the markup; shown only when the browser has Web Bluetooth and Connect would not already use it. Never built by the module |
 | `#bpplus-measure` | required | Takes one measurement. Becomes **Cancel** while the cuff inflates and **Repeat** once a reading has been taken |
 | `#bpplus-status` | required | The single large status line |
 | `#bpplus-resend` | optional | Shown only after a filing failed. Built by the module if the instrument has none |

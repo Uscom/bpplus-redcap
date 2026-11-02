@@ -401,6 +401,140 @@ if (JSDOM) {
   }
 }
 
+// -- Connect by Bluetooth ------------------------------------------------------
+// Chrome or Edge on Windows has Web Serial, so Connect takes the cable and a BP+
+// with a Bluetooth bridge was unreachable from a desktop at all. The second
+// button is the way to it. It must open the Bluetooth picker and nothing else,
+// leave Connect on the cable, never be reached by a resume, and appear only
+// where it is not a second copy of Connect.
+
+console.log('\nConnect by Bluetooth');
+
+{
+  const module = fs.readFileSync(new URL('../js/bpplus-capture.js', import.meta.url), 'utf8');
+  const instrument = fs.readFileSync(
+    new URL('../../../instruments/bpplus_measurement/instrument.html', import.meta.url), 'utf8');
+  const harness = fs.readFileSync(new URL('../test/harness.html', import.meta.url), 'utf8');
+  const hook = harness.slice(harness.indexOf('BPPLUS_TRANSPORT = function'));
+
+  // Hidden in the markup, so a page where the module never runs -- or decides
+  // not to offer it -- has no dead button on it. type="button" for the reason
+  // every other button has it: without it the first press submits the form.
+  check('the shipped instrument declares it, hidden, as a plain button',
+    /<button type="button" id="bpplus-connect-bluetooth"[^>]*style="display:none;"/.test(instrument));
+
+  check('the module routes it through the Bluetooth branch, not around it',
+    /options\.bluetooth === true\s*\?\s*\{ kind: api\.TransportKind\.bluetooth/.test(module));
+
+  check('and the harness hook makes the same choice',
+    /options\.bluetooth === true\s*\?\s*\{ kind: api\.TransportKind\.bluetooth/.test(
+      hook.slice(0, hook.indexOf('\n};'))));
+}
+
+if (JSDOM) {
+  const nodeHadNavigator = typeof globalThis.navigator !== 'undefined';
+  if (!nodeHadNavigator) {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+  }
+
+  const sdkUrl = new URL('../sdk/index.js', import.meta.url).href;
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const counts = { requestPort: 0, getPorts: 0, requestDevice: 0 };
+
+  const serial = {
+    requestPort: async () => { counts.requestPort++; throw new Error('No port selected by the user.'); },
+    getPorts:    async () => { counts.getPorts++; return []; },
+  };
+  const bluetooth = {
+    requestDevice: async () => {
+      counts.requestDevice++;
+      throw new Error('User cancelled the requestDevice() chooser.');
+    },
+  };
+
+  const give = (name, value) => {
+    if (value) Object.defineProperty(globalThis.navigator, name, { configurable: true, value });
+    else delete globalThis.navigator[name];
+  };
+
+  const page = async withButton => {
+    const w = new JSDOM(`<!doctype html><html><body>
+      <button type="button" id="bpplus-connect">Connect BP+</button>
+      ${withButton ? '<button type="button" id="bpplus-connect-bluetooth" style="display:none;">Connect by Bluetooth</button>' : ''}
+      <button type="button" id="bpplus-measure">Measure</button>
+      <div id="bpplus-status"></div>
+    </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true }).window;
+    w.BPPLUS_CONFIG = { record: 'R1', sdkUrl };
+    w.console.log = () => {}; w.console.warn = () => {}; w.console.error = () => {};
+    w.eval(fs.readFileSync(new URL('../js/bpplus-capture.js', import.meta.url), 'utf8'));
+    w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    await wait(200);
+    return w;
+  };
+  const shown = el => !!el && el.style.display !== 'none';
+
+  try {
+    // A desktop: Web Serial and Web Bluetooth both present.
+    give('serial', serial);
+    give('bluetooth', bluetooth);
+    {
+      const w = await page(true);
+      const button = w.document.getElementById('bpplus-connect-bluetooth');
+      const connect = w.document.getElementById('bpplus-connect');
+
+      check('a desktop with Web Bluetooth is offered it',
+        shown(button) && !button.disabled,
+        'display=' + button.style.display + ' disabled=' + button.disabled);
+      check('and the resume opens neither picker',
+        counts.requestPort === 0 && counts.requestDevice === 0 && counts.getPorts > 0,
+        JSON.stringify(counts));
+
+      connect.click();
+      await wait(150);
+      check('Connect still takes the cable',
+        counts.requestPort === 1 && counts.requestDevice === 0, JSON.stringify(counts));
+
+      button.click();
+      await wait(150);
+      check('Connect by Bluetooth opens the Bluetooth picker, and only that',
+        counts.requestDevice === 1 && counts.requestPort === 1, JSON.stringify(counts));
+      check('and a cancelled picker leaves both buttons where the operator can try again',
+        shown(connect) && shown(button) && !connect.disabled && !button.disabled,
+        'connect ' + shown(connect) + '/' + connect.disabled +
+        ', bluetooth ' + shown(button) + '/' + button.disabled);
+    }
+
+    // An instrument without the button is not given one: building it would put
+    // a new control on every existing project's page with the upgrade.
+    {
+      const w = await page(false);
+      check('an instrument without the button is not given one',
+        !w.document.getElementById('bpplus-connect-bluetooth'));
+    }
+
+    // Bluefy on an iPad: Connect already is the Bluetooth picker.
+    give('serial', null);
+    {
+      const w = await page(true);
+      check('where Connect already uses Bluetooth, it is not offered twice',
+        !shown(w.document.getElementById('bpplus-connect-bluetooth')));
+    }
+
+    // A browser with no Web Bluetooth: the button could only fail.
+    give('serial', serial);
+    give('bluetooth', null);
+    {
+      const w = await page(true);
+      check('a browser without Web Bluetooth is not offered it',
+        !shown(w.document.getElementById('bpplus-connect-bluetooth')));
+    }
+  } finally {
+    give('serial', null);
+    give('bluetooth', null);
+    if (!nodeHadNavigator) delete globalThis.navigator;
+  }
+}
+
 // -- Does the harness still simulate the submit? -------------------------------
 // The recording is filed during the measurement, and the form is then told the
 // document id -- because a REDCap submit posts the value the file field was

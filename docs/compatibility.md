@@ -11,7 +11,7 @@ module version alone does not identify the code that talked to the device.
 
 | Module | Version | SDK | Terminal API | BP+ software | REDCap framework |
 |---|---|---|---|---|---|
-| `bpplus_data_capture` | 2.1.1 | 1.3.1 (`v1.3.1`) | 2.4 | 5.3.0.0 series | 15 |
+| `bpplus_data_capture` | 2.1.1 to 2.2.0 | 1.3.1 (`v1.3.1`) | 2.4 | 5.3.0.0 series | 15 |
 | `bpplus_data_capture` | 2.0.0 to 2.1.0 | 1.3.0 (`v1.3.0`) | 2.4 | 5.3.0.0 series | 15 |
 
 The SDK column names the tag a copy is pinned to. The authoritative statement for
@@ -58,8 +58,8 @@ the strength of a string.
 
 | | Web Serial | WebUSB | Web Bluetooth | Works |
 |---|---|---|---|---|
-| Chrome / Edge, desktop | yes | yes | yes | yes, over Web Serial |
-| Chrome, Android | reports yes, but see below | yes | yes | yes, over **WebUSB** |
+| Chrome / Edge, desktop | yes | yes | yes | yes, over Web Serial; over **Bluetooth** with a bridge and Connect by Bluetooth (module 2.2.0 and later) |
+| Chrome, Android | reports yes, but see below | yes | yes | yes, over **WebUSB**; over **Bluetooth** with a bridge and Connect by Bluetooth (module 2.2.0 and later) |
 | Bluefy, iOS | no | no | yes | yes, over **Bluetooth**, with a bridge (module 2.1.1 and later) |
 | Firefox, any | no | no | no | no |
 | Safari, any | no | no | no | no |
@@ -73,8 +73,11 @@ Prolific PL2303 because that is the only driver the SDK ships. See
 On iOS every browser is Safari underneath. Bluefy adds Web Bluetooth and nothing
 else, so the BP+ needs a BLE-to-serial bridge on its serial port; the bridges the
 SDK recognises are the `BLE_PROFILES` in `sdk/transports/web-bluetooth.js`.
-Bluetooth is chosen only when a browser has neither Web Serial nor WebUSB, so a
-desktop or an Android tablet uses the cable even with a bridge fitted.
+Connect chooses Bluetooth only when a browser has neither Web Serial nor WebUSB,
+so on a desktop or an Android tablet Connect uses the cable even with a bridge
+fitted. From module 2.2.0 an instrument can carry a second button, Connect by
+Bluetooth, which those browsers show and which opens the Bluetooth picker
+instead. An instrument without it offers the cable only.
 
 Every route needs a **secure context** — HTTPS or `localhost`. There is no
 exception and no flag.

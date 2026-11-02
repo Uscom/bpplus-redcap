@@ -7,6 +7,55 @@ version and stays on it.
 The version here must match the directory name REDCap installs it as, and the
 release tag. The release workflow refuses a tag that disagrees.
 
+## 2.2.0 — 2026-11-03
+
+### Connect by Bluetooth, on a desktop or a tablet
+
+2.1.0 reached a Bluetooth bridge only from a browser with no cable API, which in
+practice meant Bluefy on an iPad. Chrome and Edge on Windows have Web Serial, so
+Connect took the cable there and a BP+ with a bridge could not be reached from a
+desktop at all.
+
+A second button, **Connect by Bluetooth** (`#bpplus-connect-bluetooth`), opens
+the browser's Bluetooth picker instead. Connect is unchanged and still takes the
+cable. The button is shown only where it adds something: the browser has Web
+Bluetooth, and Connect would not already use it. It is not shown in Bluefy,
+where Connect already is the Bluetooth picker, nor in a browser with no Web
+Bluetooth.
+
+Over Bluetooth the measurement, the fields and the filed recording are the same
+as over a cable, and as in 2.1.0 the bridge is chosen again on each survey page.
+On the next page the module still tries to resume the cable silently, finds
+none, and leaves both buttons where they were.
+
+### An existing project is not changed by the upgrade
+
+The button comes from the instrument, not the module. A project whose
+instrument does not have it goes on showing Connect alone, so sites without a
+bridge are not offered a choice they cannot use. To add it, edit the
+descriptive field `bpplus_intro` in the Online Designer and put this line after
+the Connect button:
+
+```html
+<button type="button" id="bpplus-connect-bluetooth" class="btn btn-defaultrc" style="display:none;">Connect by Bluetooth</button>
+```
+
+`display:none` is deliberate: the module shows the button when the browser can
+use it. Editing the one field is safer than re-importing the data dictionary,
+which replaces the whole dictionary. `instruments/bpplus_measurement/` and the
+demo project carry the button already.
+
+### The test harness
+
+The transport hook honours the same choice, so Connect by Bluetooth on the
+harness opens the Bluetooth picker as it does in REDCap. The browser line says
+whether the button is offered. `test/smoke.mjs` checks that, on a browser with
+both Web Serial and Web Bluetooth, Connect asks for a port and Connect by
+Bluetooth asks for a Bluetooth device, that the resume asks for neither, and
+that the button is not offered in Bluefy or without Web Bluetooth.
+
+Nothing in `sdk/` changed: still v1.3.1, verified against its manifest.
+
 ## 2.1.1 — 2026-10-30
 
 SDK 1.3.1, which reports Android only on positive evidence: an iPad, an iPhone

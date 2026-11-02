@@ -57,6 +57,31 @@ the wrong one.
 ones advertising a bridge the SDK recognises. Check the bridge is powered and is
 not still connected to another app; the BP+ Bridge advertises as `BP+ Bridge`.
 
+## No Bluetooth option on a desktop
+
+Expected with Connect alone. Chrome and Edge on Windows have Web Serial, so
+Connect opens the port picker, even with a bridge fitted to the BP+. The way to
+the bridge from a desktop or an Android tablet is the **Connect by Bluetooth**
+button, from module 2.2.0.
+
+If it is not on the page:
+
+- **The instrument does not have it.** The button comes from the instrument, not
+  the module, so a project set up before 2.2.0 shows Connect alone until
+  `#bpplus-connect-bluetooth` is added to `bpplus_intro`. The line to add is in
+  the module's `CHANGELOG.md` under 2.2.0.
+- **The browser has no Web Bluetooth.** The console says which:
+
+  ```
+  [BP+] Connect by Bluetooth not offered (Connect uses serial, webBluetooth=false)
+  ```
+
+- **The form is read-only.** Neither connect button is usable there, and the
+  Bluetooth one stays hidden.
+
+A PC with no Bluetooth adapter still has Web Bluetooth, so the button is shown;
+pressing it reports that no adapter is available.
+
 ## Connect asks for the bridge on every survey page
 
 Expected, over Bluetooth. A cable is picked back up silently after a page

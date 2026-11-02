@@ -434,6 +434,9 @@ function reloadWith(changes) {
     `${env.android ? ' &middot; Android' : ''}` +
     `${env.secureContext ? '' : ' &middot; <b>not a secure context - the device APIs are unavailable</b>'}` +
     `<br><b>A real BP+ would connect over:</b> ${pick.kind || 'nothing available'} &mdash; ${pick.reason}` +
+    `${env.webBluetooth && pick.kind !== sdk.TransportKind.bluetooth
+        ? '<br><b>Connect by Bluetooth:</b> offered, for a BP+ with a bridge on its serial port'
+        : ''}` +
     `<br><b>Module:</b> <span id="module-version">reading config.json…</span>` +
     `<br><b>SDK:</b> ${sdk.SDK_VERSION}, written against Terminal API ${sdk.TERMINAL_API_VERSION}`;
 
@@ -469,6 +472,7 @@ const FALLBACK_INSTRUMENT = `
   <div id="bpplus-status" style="margin-bottom:12px;"></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
     <button type="button" id="bpplus-connect" class="btn btn-primaryrc">Connect BP+</button>
+    <button type="button" id="bpplus-connect-bluetooth" class="btn btn-defaultrc" style="display:none;">Connect by Bluetooth</button>
     <button type="button" id="bpplus-measure" class="btn btn-primaryrc" disabled>Measure</button>
     <button type="button" id="bpplus-cancel" class="btn btn-defaultrc" disabled>Cancel</button>
     <button type="button" id="bpplus-ping" class="btn btn-defaultrc" disabled>Check device</button>
@@ -651,8 +655,11 @@ window.BPPLUS_TRANSPORT = function (api, options) {
       : { scenario: settings.scenario });
   }
   // The same choice the module makes, transport for transport. A hook that
-  // chose differently would test a connection REDCap never makes.
-  const pick = api.recommendedTransport();
+  // chose differently would test a connection REDCap never makes -- and one
+  // that ignored options.bluetooth would send Connect by Bluetooth to the cable.
+  const pick = options.bluetooth === true
+    ? { kind: api.TransportKind.bluetooth }
+    : api.recommendedTransport();
   if (pick.kind === api.TransportKind.usbSerial) return new api.UsbSerialTransport({ silent });
   if (pick.kind === api.TransportKind.bluetooth) {
     // Refused for a resume, as the module refuses it: the Bluetooth transport

@@ -6,7 +6,7 @@
   inside a spreadsheet cell is how element ids get lost, so the file is the
   source and DataDictionary.csv is generated from it:
 
-      node tools/build-instrument-csv.mjs
+      node tools/build-instrument.mjs
 
   What matters here is the ids. The module finds its controls by id and does
   nothing at all when they are absent, so a renamed id is a survey page with
@@ -14,7 +14,18 @@
 
       #bpplus-connect   #bpplus-measure   #bpplus-status      required
       #bpplus-ping      #bpplus-resend                       optional
+      #bpplus-connect-bluetooth                              optional
       #bpplus-alerts    #bpplus-results   #bpplus-device-info  optional
+
+  #bpplus-connect-bluetooth is for a BP+ with a Bluetooth bridge on its serial
+  port, used from a browser that would otherwise take the cable -- Chrome or
+  Edge on a desktop, or an Android tablet. Connect uses the cable wherever
+  there is one, so without this button such a browser never reaches the bridge.
+  It starts hidden, and the module shows it only when the browser has Web
+  Bluetooth and Connect would not already use it: in Bluefy on an iPad, Connect
+  is the Bluetooth picker, and a second button would open the same picker.
+  Leave it out of an instrument whose sites have no bridge, and nobody is
+  offered a choice they cannot use.
 
   There is no Cancel button. #bpplus-measure becomes Cancel while the cuff is
   inflating and Repeat once a reading has been taken, because a separate button
@@ -36,6 +47,7 @@
 
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
   <button type="button" id="bpplus-connect" class="btn btn-primaryrc">Connect BP+</button>
+  <button type="button" id="bpplus-connect-bluetooth" class="btn btn-defaultrc" style="display:none;">Connect by Bluetooth</button>
   <button type="button" id="bpplus-measure" class="btn btn-primaryrc" disabled>Measure</button>
   <button type="button" id="bpplus-ping" class="btn btn-defaultrc" disabled>Check device</button>
   <button type="button" id="bpplus-resend" class="btn btn-defaultrc" style="display:none;">Resend recording</button>

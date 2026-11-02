@@ -11,6 +11,10 @@
  * plain and another can carry the technical panels without a setting to say so.
  *
  *   #bpplus-connect       opens the browser's device picker
+ *   #bpplus-connect-bluetooth
+ *                         optional; opens the Bluetooth picker where Connect
+ *                         would take the cable. Shown only where that differs
+ *                         from Connect -- see offerBluetooth()
  *   #bpplus-measure       takes one measurement. Its label becomes Cancel while
  *                         the cuff is inflating and Repeat once a reading has
  *                         been taken -- one control, saying what it will do
@@ -89,6 +93,7 @@
   async function start() {
     var ui = {
       connect: document.getElementById('bpplus-connect'),
+      connectBluetooth: document.getElementById('bpplus-connect-bluetooth'),
       measure: document.getElementById('bpplus-measure'),
       cancel:  document.getElementById('bpplus-cancel'),
       ping:    document.getElementById('bpplus-ping'),
@@ -116,6 +121,7 @@
     var filing = false;         // the recording is on its way to the server
     var stored = false;         // at least one reading has reached the record
     var pendingXml = null;      // a recording the server would not take
+    var bluetoothOffered = false;  // see offerBluetooth()
 
     // Captured before anything relabels it, so a study's own wording survives
     // being turned into Cancel and back.
@@ -377,10 +383,8 @@
       device = null;
       features = null;
 
-      if (ui.connect) {
-        ui.connect.style.display = '';
-        setEnabled(ui.connect, true);
-      }
+      showConnectControls(true);
+      setConnectEnabled(true);
 
       setStatus('error', shortfall);
       updateButtons();
@@ -419,6 +423,11 @@
      * and the note at the top of sdk/transports/detect.js carries the
      * measurements behind that decision.
      *
+     * The one exception is options.bluetooth, which Connect by Bluetooth sets.
+     * The SDK puts the cable first wherever there is a cable API, so a desktop
+     * with a bridge fitted is never sent to it; the operator pressing that
+     * button is the only thing that can say a bridge is there.
+     *
      * The BPPLUS_TRANSPORT hook exists so the test harness can run this same
      * code against the SDK simulator with no device attached. REDCap never sets
      * it.
@@ -455,7 +464,14 @@
       // mistake that makes a resume call requestPort() anyway.
       var silent = options.silent === true;
 
-      var pick = api.recommendedTransport();
+      // Turned into a pick rather than built here, so it goes through the same
+      // branch below as an SDK choice of Bluetooth -- refusal of a silent
+      // request included.
+      var pick = options.bluetooth === true
+        ? { kind: api.TransportKind.bluetooth,
+            reason: 'Connect by Bluetooth was pressed.',
+            environment: api.describeEnvironment() }
+        : api.recommendedTransport();
       var env = pick.environment;
 
       // Logged because "it picked the wrong transport" is the first thing to
@@ -1368,22 +1384,102 @@
              'saved. Open the record for editing first.';
     }
 
+    // -- Connect, and Connect by Bluetooth -----------------------------------
+
+    /**
+     * The connect controls, shown and hidden together.
+     *
+     * Both go once a device is connected and come back together when it is let
+     * go, so a Bluetooth button never sits beside a live Measure. The Bluetooth
+     * one only ever comes back where it was offered.
+     */
+    function showConnectControls(show) {
+      if (ui.connect) ui.connect.style.display = show ? '' : 'none';
+      if (ui.connectBluetooth) {
+        ui.connectBluetooth.style.display = show && bluetoothOffered ? '' : 'none';
+      }
+    }
+
+    function setConnectEnabled(enabled) {
+      setEnabled(ui.connect, enabled);
+      setEnabled(ui.connectBluetooth, enabled);
+    }
+
+    /**
+     * What both connect buttons do, differing only in the transport asked for.
+     *
+     * Both are held shut while either is in progress. connect() releases an
+     * existing device before it refuses a second attempt, so a press on the
+     * other button while a picker is open would close the port the first
+     * press is opening.
+     */
+    async function connectFromButton(options, prompt) {
+      setConnectEnabled(false);
+      setStatus('normal', prompt);
+      try {
+        await connect(options);
+        setStatus('success', 'BP+ connected. Press Measure when the cuff is on.');
+        showConnectControls(false);
+        updateButtons();
+      } catch (error) {
+        device = null;
+        showConnectControls(true);
+        setConnectEnabled(true);
+        setStatus('error', describe(error));
+        console.error('[BP+]', error);
+      }
+    }
+
     if (ui.connect) {
-      ui.connect.addEventListener('click', async function () {
-        setEnabled(ui.connect, false);
-        setStatus('normal', 'Choose the BP+ in the browser picker…');
-        try {
-          await connect();
-          setStatus('success', 'BP+ connected. Press Measure when the cuff is on.');
-          ui.connect.style.display = 'none';
-          updateButtons();
-        } catch (error) {
-          device = null;
-          setEnabled(ui.connect, true);
-          setStatus('error', describe(error));
-          console.error('[BP+]', error);
-        }
+      ui.connect.addEventListener('click', function () {
+        connectFromButton({}, 'Choose the BP+ in the browser picker…');
       });
+    }
+
+    if (ui.connectBluetooth) {
+      ui.connectBluetooth.addEventListener('click', function () {
+        connectFromButton({ bluetooth: true },
+          'Choose the BP+ Bridge in the browser\'s Bluetooth picker…');
+      });
+    }
+
+    /**
+     * Offer Connect by Bluetooth where it reaches something Connect cannot.
+     *
+     * Connect takes the SDK's choice, and the SDK puts the cable first: Web
+     * Serial on a desktop, WebUSB on Android, Bluetooth only where a browser has
+     * neither. Right for a clinic, where the BP+ is on a cable -- and it means a
+     * desktop or a tablet with a bridge fitted never reaches the bridge. This
+     * button is that route, beside Connect rather than instead of it.
+     *
+     * Not offered where it would duplicate Connect. In Bluefy on an iPad the
+     * SDK's choice already is Bluetooth, and two buttons opening one picker
+     * leave the operator wondering what the difference is. Nor where the
+     * browser has no Web Bluetooth at all, because there it can only fail.
+     *
+     * Not built when the instrument has no such button, as Resend is. That
+     * would put a new control on every existing project's page the day the
+     * module is upgraded, including all the ones with no bridge.
+     *
+     * Follows Connect rather than deciding for itself whether to show: a resume
+     * or a click may have hidden or disabled Connect while the SDK was loading.
+     */
+    async function offerBluetooth() {
+      if (!ui.connectBluetooth) return;
+
+      var api = await loadSdk();
+      var pick = api.recommendedTransport();
+      bluetoothOffered = !!pick.environment.webBluetooth &&
+                         pick.kind !== api.TransportKind.bluetooth;
+
+      var connectShown = !ui.connect || ui.connect.style.display !== 'none';
+      ui.connectBluetooth.style.display = bluetoothOffered && connectShown ? '' : 'none';
+      setEnabled(ui.connectBluetooth, !ui.connect || !ui.connect.disabled);
+
+      console.log('[BP+] Connect by Bluetooth ' +
+                  (bluetoothOffered ? 'offered' : 'not offered') +
+                  ' (Connect uses ' + pick.kind + ', webBluetooth=' +
+                  pick.environment.webBluetooth + ')');
     }
 
     if (ui.measure) {
@@ -1560,8 +1656,10 @@
 
     var locked = readOnlyReason();
     if (locked) {
+      // Connect by Bluetooth is left hidden: one dead button explains the page,
+      // and a second one says nothing more.
       setStatus('error', locked);
-      setEnabled(ui.connect, false);
+      setConnectEnabled(false);
       setEnabled(ui.measure, false);
       setEnabled(ui.ping,    false);
       setEnabled(ui.cancel,  false);
@@ -1590,7 +1688,7 @@
       try {
         await connect({ silent: true });
         setStatus('success', 'BP+ reconnected. Press Measure when the cuff is on.');
-        if (ui.connect) ui.connect.style.display = 'none';
+        showConnectControls(false);
         updateButtons();
       } catch (error) {
         device = null;
@@ -1598,7 +1696,14 @@
       }
     }
 
-    if (!locked) resumeConnection();
+    if (!locked) {
+      // Not awaited, and not before the resume: neither depends on the other,
+      // and offerBluetooth() follows whatever the resume has done to Connect.
+      offerBluetooth().catch(function (error) {
+        console.warn('[BP+] Connect by Bluetooth not offered:', error && error.message);
+      });
+      resumeConnection();
+    }
 
     // Exposed so the test harness can drive the same code REDCap runs. Nothing
     // in the module reads this back.
